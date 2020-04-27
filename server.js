@@ -1,11 +1,20 @@
 require("dotenv").config();
 const express = require("express");
-const http = require("http");
 const app = express();
-const server = http.createServer(app);
 const socket = require("socket.io");
-const io = socket(server);
+const path = require("path");
+app.use(express.static(path.join(__dirname, "./client/build")));
 
+app.get("/*", (req, res) => {
+  console.log("heheh")
+  res.sendFile(path.join(__dirname, "./client/build/"));
+});
+
+const server = app.listen(process.env.PORT || 8000, () =>
+console.log("server is running on port 8000")
+);
+
+const io = socket(server);
 const users = {};
 
 const socketToRoom = {};
@@ -52,7 +61,3 @@ io.on("connection", (socket) => {
     }
   });
 });
-
-server.listen(process.env.PORT || 8000, () =>
-  console.log("server is running on port 8000")
-);
