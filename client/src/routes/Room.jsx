@@ -1,8 +1,26 @@
 import React, { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 import Peer from "simple-peer";
-import { Paper } from "@material-ui/core";
+import { Paper, Grid, GridList, GridListTile } from "@material-ui/core";
 import MainLayout from "../components/MainLayout";
+import { makeStyles } from "@material-ui/core/styles";
+
+const useStyles = makeStyles((theme) => ({
+  root: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "space-around",
+    overflow: "hidden",
+    backgroundColor: theme.palette.background.paper,
+  },
+  gridList: {
+    width: "100vw",
+    height: "100% !important",
+  },
+  gridListTitle: {
+    height: "100% !important",
+  },
+}));
 
 const Video = (props) => {
   const ref = useRef();
@@ -113,13 +131,34 @@ const Room = (props) => {
     return peer;
   }
 
+  const classes = useStyles();
+
   return (
     <MainLayout>
-      <div className="container">
-        <video muted ref={userVideo} autoPlay playsInline />
-        {peers.map(({ peer }, index) => {
-          return <Video key={index} peer={peer} />;
-        })}
+      <div className={classes.root}>
+        <GridList
+          className={classes.gridList}
+          cols={window.innerWidth < 500 ? 1 : 2}
+        >
+          <GridListTile
+            className={classes.gridListTitle}
+            key={"tile.img"}
+            cols={1}
+          >
+            <video muted ref={userVideo} playsInline autoPlay />
+          </GridListTile>
+          {peers.map(({ peer }, index) => {
+            return (
+              <GridListTile
+                className={classes.gridListTitle}
+                key={index}
+                cols={1}
+              >
+                <Video peer={peer} />
+              </GridListTile>
+            );
+          })}
+        </GridList>
       </div>
     </MainLayout>
   );
