@@ -1,0 +1,13 @@
+.container {
+  padding: 20px;
+  display: flex;
+  height: 100vh;
+  width: 90%;
+  margin: auto;
+  justify-content: space-around;
+  flex-wrap: wrap;
+}
+video {
+  height: 33vh;
+  width: initial;
+}
