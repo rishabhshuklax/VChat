@@ -15,9 +15,31 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 
 export default function AlertDialogSlide(props) {
   const [open, setOpen] = React.useState(false);
+  const [roomCreatable, setRoomCreatable] = React.useState(false);
+  const [roomId, setRoomId] = React.useState('');
+  const [passwd, setPasswd] = React.useState(''); // This WILL be encrypted
 
-  const handleClickOpen = () => setOpen(true);
+  const handleClickOpen  = e => {
+    e.preventDefault();
+    setOpen(true);
+    console.log('working')
+  }
   const handleClose = () => setOpen(false);
+
+  const handleIdEnter = e => {
+    e.preventDefault();
+    setRoomId(e.target.value);
+
+    if (roomId !== '' && passwd !== '') setRoomCreatable(true);
+  }
+
+  const handlePasswordEnter = e => {
+    e.preventDefault();
+    setPasswd(e.target.value);
+
+    if (roomId !== '' && passwd !== '') setRoomCreatable(true);
+  }
+
   const create = () => {
     const wsURL = window.location.origin.replace('http', 'ws');
 
@@ -26,8 +48,8 @@ export default function AlertDialogSlide(props) {
 
       console.log('ws connected');
       ws.emit(Events.CREATE_ROOM, {
-        id: 'testId' + Math.random(),
-        password: 'testPasswd' + Math.random()
+        id: roomId,
+        password: passwd
       })
 
       ws.on(Events.CREATE_ROOM_SUCCESS, 'handle-room-created', data => {
@@ -43,9 +65,13 @@ export default function AlertDialogSlide(props) {
 
   return (
     <div>
-      <Button className="absolute-center" variant="outlined" color="primary" onClick={handleClickOpen}>
-        Create a room
-      </Button>
+      <form className="absolute-center">
+        <input type="text" onInput={handleIdEnter} placeholder="Room Id" /> <br />
+        <input type="password" onInput={handlePasswordEnter} placeholder="Password" /> <br />
+        <Button variant="outlined" color="primary" disabled={!roomCreatable} style={{marginLeft: 'auto', marginRight: 'auto'}} onClick={handleClickOpen}>
+          Create a room
+        </Button>
+      </form>
       <Dialog
         open={open}
         TransitionComponent={Transition}
