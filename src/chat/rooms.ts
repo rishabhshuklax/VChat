@@ -39,8 +39,8 @@ export function setRooms(wss: WS.Server) {
           })
 
           onEvent(ws, Events.RELAY_DATA, (msg: Message) => { // Relay any WebRTC data to every other peer in the room
-            rooms.get(data.id).peers.forEach(peer => {
-              emit(peer.ws, Events.RECV_DATA, msg.data);
+            rooms.get(data.id).peers.forEach((peer, peerId) => {
+              if (peerId !== 'host') emit(peer.ws, Events.RECV_DATA, msg.data);
             })
           })
 
@@ -61,14 +61,15 @@ export function setRooms(wss: WS.Server) {
 
       if (rooms.has(roomData.id)) {
         if (rooms.get(roomData.id).password === roomData.password) { // Yes, this WILL be encrypted.
-          rooms.get(roomData.id).peers.set(uuidv4(), {
+          const newPeerId = uuidv4();
+          rooms.get(roomData.id).peers.set(newPeerId, {
             ws,
             meta: {}
           })
 
           onEvent(ws, Events.RELAY_DATA, (msg: Message) => { // Relay any WebRTC data to every other peer in the room
-            rooms.get(roomData.id).peers.forEach(peer => {
-              emit(peer.ws, Events.RECV_DATA, msg.data);
+            rooms.get(roomData.id).peers.forEach((peer, peerId) => {
+              if (peerId !== newPeerId) emit(peer.ws, Events.RECV_DATA, msg.data);  
             })
           })
 
