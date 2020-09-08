@@ -3,6 +3,7 @@ import path from 'path';
 import { config } from 'dotenv';
 import { Server } from 'ws';
 import { createServer } from 'http';
+import { setRooms } from './chat/rooms';
 
 config(); // Import environment variables
 const port = process.env.PORT || 8000;
@@ -21,3 +22,5 @@ app.get('/', (req, res) => {
 const wss = new Server({
   server
 })
+
+setRooms(wss);
