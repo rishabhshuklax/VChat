@@ -44,6 +44,30 @@ export function setRooms(wss: WS.Server) {
             })
           })
 
+          ws.on('close', () => {
+            rooms.get(data.id).peers.delete('host');
+            rooms.get(data.id).peers.forEach(peer => {
+              emit(peer.ws, Events.PEER_LEFT, {
+                id: 'host',
+                host: true,
+                meta: {},
+                reason: 'Disconnected.'
+              })
+            })
+          })
+
+          onEvent(ws, Events.LEAVE_ROOM, () => {
+            rooms.get(data.id).peers.delete('host');
+            rooms.get(data.id).peers.forEach(peer => {
+              emit(peer.ws, Events.PEER_LEFT, {
+                id: data,
+                host: false,
+                meta: {},
+                reason: 'Left the room.'
+              })
+            })
+          })
+
           emit(ws, Events.CREATE_ROOM_SUCCESS, {
             roomId: data.id
           })
@@ -78,6 +102,30 @@ export function setRooms(wss: WS.Server) {
           onEvent(ws, Events.RELAY_DATA, (msg: Message) => { // Relay any WebRTC data to every other peer in the room
             rooms.get(roomData.id).peers.forEach((peer, peerId) => {
               if (peerId !== newPeerId) emit(peer.ws, Events.RECV_DATA, msg.data);
+            })
+          })
+
+          ws.on('close', () => {
+            rooms.get(roomData.id).peers.delete(newPeerId);
+            rooms.get(roomData.id).peers.forEach(peer => {
+              emit(peer.ws, Events.PEER_LEFT, {
+                id: newPeerId,
+                host: false,
+                meta: {},
+                reason: 'Disconnected.'
+              })
+            })
+          })
+
+          onEvent(ws, Events.LEAVE_ROOM, () => {
+            rooms.get(roomData.id).peers.delete(newPeerId);
+            rooms.get(roomData.id).peers.forEach(peer => {
+              emit(peer.ws, Events.PEER_LEFT, {
+                id: newPeerId,
+                host: false,
+                meta: {},
+                reason: 'Left the room.'
+              })
             })
           })
 
