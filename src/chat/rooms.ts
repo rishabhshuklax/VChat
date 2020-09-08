@@ -33,7 +33,10 @@ export function setRooms(wss: WS.Server) {
         }
         else {
           rooms.set(data.id, {
-            peers: new Map().set('host', ws),
+            peers: new Map().set('host', {
+              ws,
+              meta: {}
+            }),
             id: data.id,
             password: data.password
           })
