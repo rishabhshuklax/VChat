@@ -16,7 +16,38 @@ export default function AlertDialogSlide(props) {
 
   const handleClickOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
-  const create = () => console.log('create room');
+  const create = () => {
+    const wsURL = window.location.origin.replace('http', 'ws');
+
+    const ws = new WebSocket(wsURL);
+    ws.onopen = () => {
+      console.log('ws connected');
+      ws.send(JSON.stringify({
+        event: 'create_room',
+        data: {
+          id: 'newRoom',
+          password: 'passwd'
+        }
+      }))
+
+      ws.onmessage = (msg) => {
+        const msgObj = JSON.parse(msg.data);
+
+        if (msgObj.event === 'create_room_success') {
+          props.router.push({
+            pathname: `/room`,
+            state: {
+              id: 'newRoom',
+              password: 'passwd',
+              host: true,
+              ws
+            }
+          })
+        }
+        else if (msgObj.event === 'create_room_err') console.log('error', msgObj.data.errMsg);
+      }
+    }
+  }
 
   return (
     <div>
