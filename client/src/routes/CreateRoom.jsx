@@ -7,6 +7,8 @@ import DialogContentText from "@material-ui/core/DialogContentText";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import Slide from "@material-ui/core/Slide";
 
+import { CommSocket, Events } from '../chat/comm';
+
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
@@ -19,32 +21,24 @@ export default function AlertDialogSlide(props) {
   const create = () => {
     const wsURL = window.location.origin.replace('http', 'ws');
 
-    const ws = new WebSocket(wsURL);
-    ws.onopen = () => {
+    const ws = new CommSocket(wsURL, () => {
       props.setWS(ws);
 
       console.log('ws connected');
-      ws.send(JSON.stringify({
-        event: 'create_room',
-        data: {
-          id: 'newRoom',
-          password: 'passwd' // encrypted
-        }
-      }))
+      ws.emit(Events.CREATE_ROOM, {
+        id: 'testId' + Math.random(),
+        password: 'testPasswd' + Math.random()
+      })
 
-      ws.onmessage = (msg) => {
-        const msgObj = JSON.parse(msg.data);
+      ws.on(Events.CREATE_ROOM_SUCCESS, 'handle-room-created', data => {
+        props.history.push(`/room`, {
+          id: data.roomId,
+          host: true
+        })
+      })
 
-        if (msgObj.event === 'create_room_success') {
-          props.history.push(`/room`, {
-            id: 'newRoom',
-            password: 'passwd', // encrypted
-            host: true
-          })
-        }
-        else if (msgObj.event === 'create_room_err') console.log('error', msgObj.data.errMsg);
-      }
-    }
+      ws.on(Events.CREATE_ROOM_ERR, 'handle-room-create-error', data => console.log('error', data.errMsg));
+    })
   }
 
   return (
