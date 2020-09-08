@@ -3,7 +3,7 @@ import path from 'path';
 import { config } from 'dotenv';
 import { Server } from 'ws';
 import { createServer } from 'http';
-import { setRooms } from './chat/rooms';
+import { setRooms } from './chat/rooms/rooms';
 
 config(); // Import environment variables
 const port = process.env.PORT || 8000;
