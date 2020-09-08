@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "VChat",
+  "name": "VChat - Deadest Simplest Cross-Platform Video Chat App",
   "icons": [
     {
       "src": "favicon.ico",

@@ -7,38 +7,14 @@ import DialogContentText from "@material-ui/core/DialogContentText";
 import DialogTitle from "@material-ui/core/DialogTitle";
 import Slide from "@material-ui/core/Slide";
 
-import { v1 } from "uuid";
-
-const CreateRoom = (props) => {
-  function create() {
-    const id = v1();
-    props.history.push(`/room/${id}`);
-  }
-
-  return <button onClick={create}>Create room</button>;
-};
-
-// export default CreateRoom;
-
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
 export default function AlertDialogSlide(props) {
-  const [open, setOpen] = React.useState(false);
-
-  function create() {
-    const id = v1();
-    props.history.push(`/room/${id}`);
-  }
-
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
-
-  const handleClose = () => {
-    setOpen(false);
-  };
+  const handleClickOpen = () => console.log('create room');
+  const handleClose = () => console.log('close');
+  const create = () => console.log('create');
 
   return (
     <div>
@@ -58,8 +34,7 @@ export default function AlertDialogSlide(props) {
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="alert-dialog-slide-description">
-            On agreeing this, a room will be created for you for peer to peer
-            video chat with upto 4 people.
+            On agreeing this, a room will be created for you.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
