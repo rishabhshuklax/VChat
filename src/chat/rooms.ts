@@ -81,7 +81,7 @@ export function setRooms(wss: WS.Server) {
     })
 
     onEvent(ws, Events.JOIN_ROOM, (msg: Message) => {
-      const roomData: RoomData = msg.data;
+      const roomData: RoomData = msg.data || {};
 
       if (rooms.has(roomData.id)) {
         if (rooms.get(roomData.id).password === roomData.password) { // Yes, this WILL be encrypted.
