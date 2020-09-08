@@ -15,6 +15,7 @@ export default function AlertDialogSlide(props) {
   const handleClickOpen = () => console.log('create room');
   const handleClose = () => console.log('close');
   const create = () => console.log('create');
+  const open = () => console.log('open');
 
   return (
     <div>
