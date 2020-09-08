@@ -12,10 +12,11 @@ const Transition = React.forwardRef(function Transition(props, ref) {
 });
 
 export default function AlertDialogSlide(props) {
-  const handleClickOpen = () => console.log('create room');
-  const handleClose = () => console.log('close');
-  const create = () => console.log('create');
-  const open = () => console.log('open');
+  const [open, setOpen] = React.useState(false);
+
+  const handleClickOpen = () => setOpen(true);
+  const handleClose = () => setOpen(false);
+  const create = () => console.log('create room');
 
   return (
     <div>
