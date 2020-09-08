@@ -60,7 +60,7 @@ export function setRooms(wss: WS.Server) {
       const roomData: RoomData = msg.data;
 
       if (rooms.has(roomData.id)) {
-        if (rooms.get(roomData.id).password === roomData.password) {
+        if (rooms.get(roomData.id).password === roomData.password) { // Yes, this WILL be encrypted.
           rooms.get(roomData.id).peers.set(uuidv4(), {
             ws,
             meta: {}
