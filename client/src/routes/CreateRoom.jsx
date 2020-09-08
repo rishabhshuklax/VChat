@@ -55,6 +55,7 @@ export default function AlertDialogSlide(props) {
       ws.on(Events.CREATE_ROOM_SUCCESS, 'handle-room-created', data => {
         props.history.push(`/room`, {
           id: data.roomId,
+          peers: data.currentPeers,
           host: true
         })
       })

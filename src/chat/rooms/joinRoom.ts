@@ -11,7 +11,8 @@ export function joinRoomHandler(ws: WS, msg: Message, rooms: Map<string, Room>) 
     if (rooms.get(roomData.id).password === roomData.password) { // Yes, this WILL be encrypted.
       const newPeerId = uuidv4();
 
-      rooms.get(roomData.id).peers.forEach(peer => {
+      rooms.get(roomData.id).peers.forEach(peer =>       emit(ws, Events.ALL_PEERS, allCurrentPeers); // Send a list of all existing peers to the new peer
+      {
         emit(peer.ws, Events.NEW_PEER_JOINED, {
           newPeerId,
           meta: {}
@@ -36,8 +37,6 @@ export function joinRoomHandler(ws: WS, msg: Message, rooms: Map<string, Room>) 
           meta: peer.meta
         })
       })
-
-      emit(ws, Events.ALL_PEERS, allCurrentPeers); // Send a list of all existing peers to the new peer
 
       ws.on('close', () => {
         rooms.get(roomData.id).peers.delete(newPeerId);
@@ -64,7 +63,8 @@ export function joinRoomHandler(ws: WS, msg: Message, rooms: Map<string, Room>) 
       })
 
       emit(ws, Events.CREATE_ROOM_SUCCESS, {
-        roomId: roomData.id
+        roomId: roomData.id,
+        currentPeers: allCurrentPeers
       })
     }
     else emit(ws, Events.JOIN_ROOM_ERR, {
