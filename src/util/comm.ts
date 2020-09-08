@@ -16,7 +16,8 @@ export const Events = {
   JOIN_ROOM_SUCCESS: 'join_room_success',
   NEW_PEER_JOINED: 'new_peer_joined',
   PEER_LEFT: 'peer_left',
-  LEAVE_ROOM: 'leave_room'
+  LEAVE_ROOM: 'leave_room',
+  ALL_PEERS: 'all_peers'
 }
 
 export function onEvent(ws: WS, event: string, handler: (msg: Message) => void) {

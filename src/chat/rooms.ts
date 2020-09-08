@@ -105,6 +105,16 @@ export function setRooms(wss: WS.Server) {
             })
           })
 
+          const allCurrentPeers = [];
+          rooms.get(roomData.id).peers.forEach((peer, peerId) => {
+            allCurrentPeers.push({
+              id: peerId,
+              meta: peer.meta
+            })
+          })
+
+          emit(ws, Events.ALL_PEERS, allCurrentPeers); // Send a list of all existing peers to the new peer
+
           ws.on('close', () => {
             rooms.get(roomData.id).peers.delete(newPeerId);
             rooms.get(roomData.id).peers.forEach(peer => {
