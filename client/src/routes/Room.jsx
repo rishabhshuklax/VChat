@@ -20,14 +20,16 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const Room = (props) => {
+  console.log(props.ws, props.location);
+
   return (
     <MainLayout>
       <div>
         <p>id: {props.location.state.id}</p>
-        <p>host: {props.location.state.host}</p>
+        <p>host: {props.location.state.host ? 'yes' : 'no'}</p>
       </div>
     </MainLayout>
-  );
-};
+  )
+}
 
 export default Room;

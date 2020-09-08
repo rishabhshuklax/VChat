@@ -4,11 +4,14 @@ import CreateRoom from "./routes/CreateRoom.jsx";
 import Room from "./routes/Room.jsx";
 
 function App() {
+  let ws;
+  const setWS = (sock) => ws = sock;
+
   return (
     <BrowserRouter>
       <Switch>
-        <Route path="/" exact component={CreateRoom} />
-        <Route path="/room" component={Room} />
+        <Route path="/" exact render={routeProps => <CreateRoom {...routeProps} setWS={setWS}/>} />
+        <Route path="/room" render={routeProps => <Room {...routeProps} ws={ws} />} />
       </Switch>
     </BrowserRouter>
   );

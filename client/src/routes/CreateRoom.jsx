@@ -21,12 +21,14 @@ export default function AlertDialogSlide(props) {
 
     const ws = new WebSocket(wsURL);
     ws.onopen = () => {
+      props.setWS(ws);
+
       console.log('ws connected');
       ws.send(JSON.stringify({
         event: 'create_room',
         data: {
           id: 'newRoom',
-          password: 'passwd'
+          password: 'passwd' // encrypted
         }
       }))
 
@@ -34,14 +36,10 @@ export default function AlertDialogSlide(props) {
         const msgObj = JSON.parse(msg.data);
 
         if (msgObj.event === 'create_room_success') {
-          props.router.push({
-            pathname: `/room`,
-            state: {
-              id: 'newRoom',
-              password: 'passwd',
-              host: true,
-              ws
-            }
+          props.history.push(`/room`, {
+            id: 'newRoom',
+            password: 'passwd', // encrypted
+            host: true
           })
         }
         else if (msgObj.event === 'create_room_err') console.log('error', msgObj.data.errMsg);
