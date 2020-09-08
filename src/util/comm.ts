@@ -13,7 +13,8 @@ export const Events = {
   RECV_DATA: 'recv_data',
   JOIN_ROOM: 'join_room',
   JOIN_ROOM_ERR: 'join_room_err',
-  JOIN_ROOM_SUCCESS: 'join_room_success'
+  JOIN_ROOM_SUCCESS: 'join_room_success',
+  NEW_PEER_JOINED: 'new_peer_joined'
 }
 
 export function onEvent(ws: WS, event: string, handler: (msg: Message) => void) {
