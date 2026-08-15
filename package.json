@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "node scripts/e2e-call.mjs",
+    "verify:deploy": "node scripts/verify-deployment.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.2.0",
+    "https-proxy-agent": "^9.1.0",
     "playwright": "^1.62.1",
     "prettier": "^3.5.3",
     "tailwindcss": "^4.1.8",

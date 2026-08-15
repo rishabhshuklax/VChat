@@ -104,6 +104,16 @@ npm run e2e            # drives two real browsers through a full call
 `npm run e2e` needs a running instance and Chromium; it asserts that remote video is
 actually decoding frames, not merely that the page rendered.
 
+To smoke-test a deployed instance over the real wire protocol:
+
+```bash
+npm run verify:deploy -- https://your-deployment.vercel.app
+```
+
+That one connects real WebSocket clients and checks joining, addressed relay, chat,
+media-state broadcast, departures, password rejection, and malformed-frame resilience.
+Together the two scripts cover both halves — the server, and the peer connection.
+
 To exercise the Redis store as well:
 
 ```bash

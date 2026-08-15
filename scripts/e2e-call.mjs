@@ -89,9 +89,20 @@ function playingVideos(page) {
 }
 
 const executablePath = resolveChromium();
+
+/**
+ * Route through an outbound proxy when the environment mandates one (CI
+ * sandboxes commonly do), while keeping localhost direct so a local dev server
+ * is still reachable.
+ */
+const proxyServer = process.env.HTTPS_PROXY ?? process.env.https_proxy;
+const useProxy =
+  Boolean(proxyServer) && !BASE_URL.includes('localhost') && !BASE_URL.includes('127.0.0.1');
+
 const browser = await chromium.launch({
   args: CHROMIUM_ARGS,
   ...(executablePath ? { executablePath } : {}),
+  ...(useProxy ? { proxy: { server: proxyServer, bypass: 'localhost,127.0.0.1' } } : {}),
 });
 
 try {
