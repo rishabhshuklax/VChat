@@ -109,7 +109,7 @@ export function ControlBar({
 
   return (
     <div ref={popoverRef} className="relative flex justify-center">
-      <div className="glass flex items-center gap-1.5 rounded-full border border-line p-2 shadow-2xl sm:gap-2">
+      <div className="glass flex items-center gap-1 rounded-full border border-line p-1.5 shadow-2xl sm:gap-2 sm:p-2">
         <ControlButton
           label={local?.state.audio ? 'Mute microphone (M)' : 'Unmute microphone (M)'}
           active={Boolean(local?.state.audio)}
@@ -135,18 +135,20 @@ export function ControlBar({
         </ControlButton>
 
         {canShare && (
-          <ControlButton
-            label={state.presenting ? 'Stop sharing (S)' : 'Share your screen (S)'}
-            active
-            highlight={state.presenting}
-            onClick={() => void engine.toggleScreenShare()}
-          >
-            {state.presenting ? (
-              <ScreenOffIcon className="h-5 w-5" />
-            ) : (
-              <ScreenIcon className="h-5 w-5" />
-            )}
-          </ControlButton>
+          <div className={cn(!state.presenting && 'hidden sm:block')}>
+            <ControlButton
+              label={state.presenting ? 'Stop sharing (S)' : 'Share your screen (S)'}
+              active
+              highlight={state.presenting}
+              onClick={() => void engine.toggleScreenShare()}
+            >
+              {state.presenting ? (
+                <ScreenOffIcon className="h-5 w-5" />
+              ) : (
+                <ScreenIcon className="h-5 w-5" />
+              )}
+            </ControlButton>
+          </div>
         )}
 
         <ControlButton label="Draw (D)" active highlight={inkActive} onClick={onToggleInk}>
@@ -200,7 +202,7 @@ export function ControlBar({
           title="Leave call"
           aria-label="Leave call"
           className={cn(
-            'flex h-10 items-center justify-center rounded-full bg-danger px-4 text-white sm:h-12 sm:px-6',
+            'flex h-10 items-center justify-center rounded-full bg-danger px-3.5 text-white sm:h-12 sm:px-6',
             'transition-all duration-200 [transition-timing-function:var(--ease-spring)] hover:scale-105 hover:brightness-110 active:scale-90',
           )}
         >

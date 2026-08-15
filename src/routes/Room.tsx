@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ERROR_CODES, formatRoomCode, normalizeRoomCode } from '@shared/protocol';
 import { ChatPanel } from '@/components/ChatPanel';
+import { FocusStage } from '@/components/FocusStage';
 import { InkLayer } from '@/components/InkLayer';
 import { ControlBar } from '@/components/ControlBar';
 import { CheckIcon, CopyIcon, VideoLogo } from '@/components/Icons';
@@ -13,6 +14,7 @@ import { Toasts } from '@/components/Toasts';
 import { VideoGrid } from '@/components/VideoGrid';
 import { VideoTile } from '@/components/VideoTile';
 import { Button } from '@/components/ui/Button';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { CallEngine, type Participant } from '@/lib/call-engine';
 import { cn, copyText, formatDuration } from '@/lib/utils';
 import { Lobby, type LobbyResult } from './Lobby';
@@ -29,6 +31,7 @@ export function Room() {
   // a bare `new CallEngine()` would construct a throwaway on every render.
   const [engine] = useState(() => new CallEngine());
   const state = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const [phase, setPhase] = useState<Phase>('lobby');
   const [panel, setPanel] = useState<Panel>('none');
@@ -345,6 +348,21 @@ export function Room() {
   const featured = faceTime ? (swapped ? local : remote[0]) : null;
   const pipParticipant = faceTime ? (swapped ? remote[0] : local) : null;
 
+  // Group calls on a phone: a grid of letterboxed strips crops everyone to
+  // foreheads, so phones get a conversation-directed stage instead — one big
+  // portrait tile following the active speaker, everyone else in a filmstrip.
+  // A hand-picked pin or a running presentation takes precedence over voice.
+  const presenter = participants.find((participant) => participant.state.screen) ?? null;
+  const focusMode = !isDesktop && (participants.length >= 3 || Boolean(presenter));
+  const focusParticipant = focusMode
+    ? (participants.find((participant) => participant.id === pinnedId) ??
+      presenter ??
+      participants.find((participant) => participant.id === state.activeSpeakerId) ??
+      remote[0] ??
+      local ??
+      null)
+    : null;
+
   const localMirror = state.facing !== 'environment';
   const canFlip = state.devices.cameras.length > 1;
   const flip = canFlip ? () => void engine.flipCamera() : undefined;
@@ -403,7 +421,17 @@ export function Room() {
 
       {/* Stage */}
       <main className="absolute inset-0 px-2 pt-[3.9rem] pb-[6.5rem] sm:px-3">
-        {faceTime && featured && pipParticipant ? (
+        {focusMode && focusParticipant ? (
+          <FocusStage
+            participants={participants}
+            focus={focusParticipant}
+            pinned={pinnedId === focusParticipant.id}
+            onPin={(id) => setPinnedId(id)}
+            onUnpin={() => setPinnedId(null)}
+            localMirror={localMirror}
+            onFlipLocal={flip}
+          />
+        ) : faceTime && featured && pipParticipant ? (
           <>
             <VideoTile
               participant={featured}

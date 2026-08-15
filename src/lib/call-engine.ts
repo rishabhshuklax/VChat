@@ -88,6 +88,11 @@ export interface CallState {
   /** Every display name that has been in this call — the call receipt. */
   roster: string[];
   reactionCount: number;
+  /**
+   * Who currently holds the floor, chosen with hysteresis so the focus view
+   * follows the conversation instead of twitching at every interjection.
+   */
+  activeSpeakerId: string | null;
 }
 
 export interface JoinOptions {
@@ -120,6 +125,7 @@ const INITIAL: CallState = {
   facing: 'user',
   roster: [],
   reactionCount: 0,
+  activeSpeakerId: null,
 };
 
 let noticeSeq = 0;
@@ -143,6 +149,9 @@ export class CallEngine {
   #joinOptions: JoinOptions | null = null;
 
   #meterTimer: ReturnType<typeof setInterval> | null = null;
+  /** Active-speaker hysteresis: a challenger must hold the floor briefly. */
+  #speakerCandidate: string | null = null;
+  #speakerCandidateSince = 0;
   /** Debounce before surfacing 'reconnecting': sub-second blips stay invisible. */
   #reconnectSurfaceTimer: ReturnType<typeof setTimeout> | null = null;
   #joinRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -376,6 +385,9 @@ export class CallEngine {
       case 'peer-left': {
         const leaving = this.#state.participants.find((p) => p.id === message.peerId);
         this.#removeParticipant(message.peerId);
+        if (this.#state.activeSpeakerId === message.peerId) {
+          this.#set({ activeSpeakerId: null });
+        }
         if (leaving && message.reason !== 'replaced') {
           this.#notify('info', `${leaving.name} left`);
         }
@@ -827,6 +839,31 @@ export class CallEngine {
         return participant;
       });
       if (dirty) this.#set({ participants });
+
+      // Active-speaker election. Only remote peers compete (you never need to
+      // watch yourself), the first voice wins instantly, and after that a new
+      // voice must hold the floor for ~1.1s before the focus moves — so brief
+      // "mm-hm"s never yank the camera around.
+      let loudest: Participant | null = null;
+      for (const participant of participants) {
+        if (participant.isLocal || !participant.speaking) continue;
+        if (!loudest || participant.level > loudest.level) loudest = participant;
+      }
+      if (loudest) {
+        if (loudest.id === this.#state.activeSpeakerId) {
+          this.#speakerCandidate = null;
+        } else if (this.#state.activeSpeakerId === null) {
+          this.#set({ activeSpeakerId: loudest.id });
+        } else if (this.#speakerCandidate === loudest.id) {
+          if (Date.now() - this.#speakerCandidateSince >= 1100) {
+            this.#speakerCandidate = null;
+            this.#set({ activeSpeakerId: loudest.id });
+          }
+        } else {
+          this.#speakerCandidate = loudest.id;
+          this.#speakerCandidateSince = Date.now();
+        }
+      }
     }, 150);
 
     this.#qualityTimer ??= setInterval(() => {
