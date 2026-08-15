@@ -19,7 +19,7 @@ import {
   stopStream,
   type DeviceList,
 } from '@/lib/media';
-import { avatarGradient, cn, copyText, initials } from '@/lib/utils';
+import { avatarColor, cn, copyText, initials } from '@/lib/utils';
 
 export interface LobbyResult {
   name: string;
@@ -133,16 +133,44 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
 
   const shareUrl = `${window.location.origin}/r/${roomId}`;
 
-  return (
-    <main className="aurora flex min-h-dvh flex-col items-center justify-center px-5 py-8">
-      <div className="mb-8 flex items-center gap-2.5">
-        <VideoLogo className="h-6 w-6 text-accent" />
-        <span className="text-lg font-semibold tracking-tight">VChat</span>
-      </div>
+  const previewToggle = (
+    on: boolean,
+    toggle: () => void,
+    OnIcon: typeof MicIcon,
+    OffIcon: typeof MicOffIcon,
+    labelOn: string,
+    labelOff: string,
+  ) => (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={on}
+      aria-label={on ? labelOn : labelOff}
+      className={cn(
+        'flex h-12 w-12 items-center justify-center rounded-full backdrop-blur-md',
+        'transition-all duration-200 [transition-timing-function:var(--ease-spring)] hover:scale-105 active:scale-90',
+        on ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-danger text-white',
+      )}
+    >
+      {on ? <OnIcon className="h-5 w-5" /> : <OffIcon className="h-5 w-5" />}
+    </button>
+  );
 
-      <div className="grid w-full max-w-4xl gap-6 lg:grid-cols-[1.25fr_1fr]">
+  return (
+    <main className="scheme-light grain flex min-h-dvh flex-col bg-paper text-soot">
+      <header className="flex items-center gap-2.5 px-5 py-5 sm:px-8">
+        <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-soot">
+          <VideoLogo className="h-4 w-4 text-accent" />
+        </span>
+        <span className="text-lg font-semibold tracking-tight">VChat</span>
+      </header>
+
+      <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-6 px-5 pb-10 sm:px-8 lg:grid-cols-[1.25fr_1fr] lg:gap-10">
         {/* Preview */}
-        <div className="relative aspect-video overflow-hidden rounded-2xl border border-line bg-surface">
+        <div
+          className="relative animate-rise overflow-hidden rounded-[1.75rem] bg-soot shadow-2xl max-lg:h-[42dvh] lg:aspect-video"
+          style={{ animationDelay: '60ms' }}
+        >
           <video
             ref={videoRef}
             autoPlay
@@ -157,58 +185,50 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
           {(!video || mediaError) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <div
-                className="flex h-20 w-20 items-center justify-center rounded-full text-2xl font-semibold text-white"
-                style={{ background: avatarGradient(name || roomId) }}
+                className="flex h-20 w-20 items-center justify-center rounded-full font-display text-3xl text-ink"
+                style={{ background: avatarColor(name || roomId) }}
               >
                 {initials(name || '?')}
               </div>
-              <p className="max-w-[32ch] px-4 text-center text-sm text-ink-muted">
+              <p className="max-w-[30ch] px-4 text-center text-sm text-ink-muted">
                 {mediaError ?? 'Your camera is off'}
               </p>
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-0 flex justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent p-4 pt-10">
-            <button
-              type="button"
-              onClick={() => setAudio((on) => !on)}
-              aria-pressed={audio}
-              aria-label={audio ? 'Join muted' : 'Join with microphone on'}
-              className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-full transition-colors',
-                audio
-                  ? 'bg-white/15 text-white hover:bg-white/25'
-                  : 'bg-danger text-white hover:brightness-110',
-              )}
-            >
-              {audio ? <MicIcon className="h-5 w-5" /> : <MicOffIcon className="h-5 w-5" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setVideo((on) => !on)}
-              aria-pressed={video}
-              aria-label={video ? 'Join with camera off' : 'Join with camera on'}
-              className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-full transition-colors',
-                video
-                  ? 'bg-white/15 text-white hover:bg-white/25'
-                  : 'bg-danger text-white hover:brightness-110',
-              )}
-            >
-              {video ? <CameraIcon className="h-5 w-5" /> : <CameraOffIcon className="h-5 w-5" />}
-            </button>
+          <div className="absolute inset-x-0 bottom-0 flex justify-center gap-3 bg-gradient-to-t from-black/70 to-transparent p-4 pt-12">
+            {previewToggle(
+              audio,
+              () => setAudio((v) => !v),
+              MicIcon,
+              MicOffIcon,
+              'Join muted',
+              'Join with microphone on',
+            )}
+            {previewToggle(
+              video,
+              () => setVideo((v) => !v),
+              CameraIcon,
+              CameraOffIcon,
+              'Join with camera off',
+              'Join with camera on',
+            )}
           </div>
         </div>
 
         {/* Join form */}
         <form
           onSubmit={submit}
-          className="glass flex flex-col rounded-2xl border border-line p-6 shadow-xl"
+          className="flex animate-rise flex-col justify-center"
+          style={{ animationDelay: '130ms' }}
         >
-          <h1 className="text-xl font-semibold tracking-tight">Ready to join?</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
+          <h1 className="font-display text-4xl tracking-tight sm:text-5xl">Ready when you are.</h1>
+
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-soot-muted">
             Room
-            <code className="font-mono tracking-wider text-ink">{formatRoomCode(roomId)}</code>
+            <code className="font-mono font-bold tracking-wider text-soot">
+              {formatRoomCode(roomId)}
+            </code>
             <button
               type="button"
               onClick={() => {
@@ -218,17 +238,17 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
                   setTimeout(() => setCopied(false), 2000);
                 });
               }}
-              className="inline-flex items-center gap-1 text-xs text-accent-bright transition-opacity hover:opacity-80"
+              className="inline-flex items-center gap-1 rounded-full bg-soot/5 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-soot/10"
             >
               {copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}
               {copied ? 'Copied' : 'Copy link'}
             </button>
           </p>
 
-          <div className="mt-5">
+          <div className="mt-6">
             <label
               htmlFor="display-name"
-              className="mb-1.5 block text-xs font-medium text-ink-muted"
+              className="mb-1.5 block font-mono text-[11px] tracking-[0.18em] text-soot-muted uppercase"
             >
               Your name
             </label>
@@ -241,15 +261,15 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
               autoComplete="name"
               autoFocus
               required
-              className="w-full rounded-xl border border-line bg-surface-2 px-4 py-3 text-sm focus:border-accent focus:outline-none"
+              className="w-full rounded-2xl border border-soot/20 bg-white/60 px-4 py-3.5 text-base focus:border-soot focus:outline-none"
             />
           </div>
 
-          {requiresPassword && (
+          {requiresPassword ? (
             <div className="mt-4">
               <label
                 htmlFor="room-password"
-                className="mb-1.5 block text-xs font-medium text-ink-muted"
+                className="mb-1.5 block font-mono text-[11px] tracking-[0.18em] text-soot-muted uppercase"
               >
                 Room password
               </label>
@@ -261,15 +281,13 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
                 maxLength={LIMITS.password.max}
                 placeholder="Required for this room"
                 autoComplete="current-password"
-                className="w-full rounded-xl border border-line bg-surface-2 px-4 py-3 text-sm focus:border-accent focus:outline-none"
+                className="w-full rounded-2xl border border-soot/20 bg-white/60 px-4 py-3.5 text-base focus:border-soot focus:outline-none"
               />
             </div>
-          )}
-
-          {!requiresPassword && (
-            <details className="mt-4 text-sm">
-              <summary className="cursor-pointer list-none text-xs font-medium text-ink-muted transition-colors hover:text-ink">
-                Set a password (optional) ›
+          ) : (
+            <details className="mt-4">
+              <summary className="cursor-pointer list-none font-mono text-[11px] tracking-[0.18em] text-soot-muted uppercase transition-colors hover:text-soot">
+                Set a password · optional ›
               </summary>
               <input
                 type="password"
@@ -278,27 +296,29 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
                 maxLength={LIMITS.password.max}
                 placeholder="Anyone joining will need this"
                 autoComplete="new-password"
-                className="mt-2 w-full rounded-xl border border-line bg-surface-2 px-4 py-3 text-sm focus:border-accent focus:outline-none"
+                className="mt-2 w-full rounded-2xl border border-soot/20 bg-white/60 px-4 py-3 text-sm focus:border-soot focus:outline-none"
               />
-              <p className="mt-1.5 text-xs text-ink-faint">
+              <p className="mt-1.5 text-xs text-soot-faint">
                 The first person to join sets the password for the room.
               </p>
             </details>
           )}
 
           <details className="mt-4">
-            <summary className="cursor-pointer list-none text-xs font-medium text-ink-muted transition-colors hover:text-ink">
+            <summary className="cursor-pointer list-none font-mono text-[11px] tracking-[0.18em] text-soot-muted uppercase transition-colors hover:text-soot">
               Camera &amp; microphone ›
             </summary>
             <div className="mt-3">
               <DeviceSelect
                 label="Camera"
+                tone="light"
                 options={devices.cameras}
                 value={cameraId}
                 onChange={setCameraId}
               />
               <DeviceSelect
                 label="Microphone"
+                tone="light"
                 options={devices.microphones}
                 value={microphoneId}
                 onChange={setMicrophoneId}
@@ -309,7 +329,7 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
           {error && (
             <p
               role="alert"
-              className="mt-4 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2.5 text-sm text-danger"
+              className="mt-4 animate-pop rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
             >
               {error}
             </p>
@@ -317,10 +337,10 @@ export function Lobby({ roomId, error, requiresPassword, busy, onJoin }: LobbyPr
 
           <Button
             type="submit"
-            variant="primary"
+            variant="accent"
             size="lg"
             disabled={!name.trim() || busy}
-            className="mt-5 w-full"
+            className="mt-6 w-full"
           >
             {busy ? 'Joining…' : 'Join now'}
           </Button>

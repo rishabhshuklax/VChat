@@ -1,11 +1,11 @@
 {
   "name": "VChat",
   "short_name": "VChat",
-  "description": "Dead simple, cross-platform, peer-to-peer video chat.",
+  "description": "Face to face in eight seconds. Peer-to-peer video calls in your browser.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#07080c",
-  "theme_color": "#07080c",
+  "background_color": "#0d0b08",
+  "theme_color": "#0d0b08",
   "icons": [
     {
       "src": "/favicon.svg",

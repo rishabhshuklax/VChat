@@ -240,6 +240,29 @@ export function attachSignaling(
     });
   }
 
+  async function handleReaction(
+    session: Session,
+    message: Extract<ClientMessage, { type: 'reaction' }>,
+  ): Promise<void> {
+    if (!session.roomId) {
+      sendError(session.ws, ERROR_CODES.NOT_IN_ROOM, 'Join a room before reacting.');
+      return;
+    }
+    // Broadcast to everyone including the sender, so every screen animates the
+    // same event from the same authoritative timestamp.
+    await publish(session.roomId, {
+      to: 'room',
+      message: {
+        type: 'reaction',
+        id: newPeerId(),
+        from: session.id,
+        name: session.name,
+        emoji: message.emoji,
+        ts: Date.now(),
+      },
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Lifecycle
   // -------------------------------------------------------------------------
@@ -320,6 +343,9 @@ export function attachSignaling(
               break;
             case 'chat':
               await handleChat(session, message);
+              break;
+            case 'reaction':
+              await handleReaction(session, message);
               break;
             case 'leave':
               await detach(session, 'left');

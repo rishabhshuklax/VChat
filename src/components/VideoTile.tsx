@@ -1,8 +1,8 @@
 import { memo, useEffect, useRef } from 'react';
 
 import type { Participant } from '@/lib/call-engine';
-import { avatarGradient, cn, initials } from '@/lib/utils';
-import { MicOffIcon, PinIcon, ScreenIcon, SignalIcon, SpinnerIcon } from './Icons';
+import { avatarColor, cn, initials } from '@/lib/utils';
+import { MicOffIcon, PinIcon, ScreenIcon } from './Icons';
 
 interface VideoTileProps {
   participant: Participant;
@@ -47,14 +47,17 @@ function VideoTileImpl({
       participant.connection === 'connecting' ||
       participant.connection === 'disconnected');
 
+  // Live mic level drives a tiny equalizer in the name chip. Muted → no bars.
+  const level = participant.state.audio ? participant.level : 0;
+
   return (
     <div
       className={cn(
         'group relative isolate flex h-full w-full items-center justify-center overflow-hidden',
-        'rounded-2xl border bg-surface transition-[border-color,box-shadow] duration-300',
+        'rounded-2xl bg-surface ring-1 transition-[box-shadow,--tw-ring-color] duration-300',
         participant.speaking
-          ? 'border-accent shadow-[0_0_0_1px_var(--color-accent),0_0_28px_-6px_var(--color-accent)]'
-          : 'border-line',
+          ? 'ring-2 ring-accent shadow-[0_0_36px_-8px_var(--color-accent)]'
+          : 'ring-line',
       )}
     >
       <video
@@ -74,57 +77,62 @@ function VideoTileImpl({
 
       {!showVideo && (
         <div className="absolute inset-0 flex items-center justify-center bg-surface">
-          <div
-            className={cn(
-              'flex items-center justify-center rounded-full font-semibold text-white/95 select-none',
-              featured ? 'h-28 w-28 text-3xl' : 'h-16 w-16 text-lg',
-            )}
-            style={{ background: avatarGradient(participant.id) }}
-          >
-            {initials(participant.name)}
+          <div className={cn('relative', connecting && 'ring-pulse')}>
+            <div
+              className={cn(
+                'flex items-center justify-center rounded-full font-display text-ink select-none',
+                featured ? 'h-28 w-28 text-4xl' : 'h-16 w-16 text-xl',
+              )}
+              style={{ background: avatarColor(participant.id) }}
+            >
+              {initials(participant.name)}
+            </div>
           </div>
         </div>
       )}
 
-      {connecting && (
-        <div className="absolute inset-0 flex items-center justify-center bg-canvas/65 backdrop-blur-sm">
-          <div className="flex items-center gap-2.5 text-sm text-ink-muted">
-            <SpinnerIcon className="h-4 w-4 animate-spin" />
-            Connecting…
-          </div>
+      {connecting && showVideo && (
+        <div className="absolute inset-0 flex items-center justify-center bg-canvas/60 backdrop-blur-sm">
+          <span className="relative flex h-12 w-12 items-center justify-center ring-pulse">
+            <span className="h-2 w-2 rounded-full bg-accent" />
+          </span>
         </div>
       )}
 
-      {/* Name plate */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 via-black/25 to-transparent p-2.5 pt-8">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {!participant.state.audio && (
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-danger/90">
-              <MicOffIcon className="h-3 w-3 text-white" />
+      {/* Name chip */}
+      <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
+        <span
+          className={cn(
+            'flex min-w-0 items-center gap-2 rounded-full bg-black/55 py-1 pr-3 pl-2.5 backdrop-blur-md',
+            participant.speaking && 'text-accent',
+          )}
+        >
+          {participant.state.audio ? (
+            <span className="eq shrink-0" aria-hidden="true">
+              <span className="h-[5px]" style={{ transform: `scaleY(${0.5 + level * 2.2})` }} />
+              <span className="h-[11px]" style={{ transform: `scaleY(${0.35 + level * 2.6})` }} />
+              <span className="h-[7px]" style={{ transform: `scaleY(${0.45 + level * 2})` }} />
+            </span>
+          ) : (
+            <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-danger">
+              <MicOffIcon className="h-2.5 w-2.5 text-white" />
             </span>
           )}
-          {participant.state.screen && (
-            <ScreenIcon className="h-3.5 w-3.5 shrink-0 text-accent-bright" />
-          )}
-          <span className="truncate text-[13px] font-medium text-white drop-shadow">
+          {participant.state.screen && <ScreenIcon className="h-3.5 w-3.5 shrink-0" />}
+          <span className="truncate text-[13px] font-medium text-white">
             {participant.name}
-            {participant.isLocal && <span className="text-white/60"> (you)</span>}
+            {participant.isLocal && <span className="text-white/50"> · you</span>}
           </span>
-        </div>
-
-        {participant.quality && participant.quality.level !== 'good' && (
-          <span
-            className={cn(
-              'shrink-0',
-              participant.quality.level === 'poor' ? 'text-danger' : 'text-caution',
-            )}
-            title={`Connection ${participant.quality.level}${
-              participant.quality.rttMs === null ? '' : ` · ${participant.quality.rttMs}ms`
-            }`}
-          >
-            <SignalIcon className="h-3.5 w-3.5" />
-          </span>
-        )}
+          {participant.quality && participant.quality.level !== 'good' && (
+            <span
+              className={cn(
+                'h-1.5 w-1.5 shrink-0 rounded-full',
+                participant.quality.level === 'poor' ? 'bg-danger' : 'bg-caution',
+              )}
+              title={`Connection ${participant.quality.level}`}
+            />
+          )}
+        </span>
       </div>
 
       {onTogglePin && (
@@ -133,10 +141,10 @@ function VideoTileImpl({
           onClick={() => onTogglePin(participant.id)}
           aria-label={pinned ? `Unpin ${participant.name}` : `Pin ${participant.name}`}
           className={cn(
-            'absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg',
-            'bg-black/55 text-white backdrop-blur transition-opacity duration-150',
-            'hover:bg-black/75 focus-visible:opacity-100',
-            pinned ? 'opacity-100 text-accent-bright' : 'opacity-0 group-hover:opacity-100',
+            'absolute top-2 right-2 flex h-9 w-9 items-center justify-center rounded-full',
+            'bg-black/55 text-white backdrop-blur-md transition-all duration-200 [transition-timing-function:var(--ease-spring)]',
+            'hover:scale-105 hover:bg-black/75 focus-visible:opacity-100 active:scale-95',
+            pinned ? 'text-accent opacity-100' : 'opacity-0 group-hover:opacity-100',
           )}
         >
           <PinIcon className="h-4 w-4" />

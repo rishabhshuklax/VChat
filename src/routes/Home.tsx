@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { LIMITS, formatRoomCode, normalizeRoomCode } from '@shared/protocol';
+import { LIMITS, normalizeRoomCode } from '@shared/protocol';
+import { ArrowRightIcon, LockIcon, PeopleIcon, ScreenIcon, VideoLogo } from '@/components/Icons';
 import { Button } from '@/components/ui/Button';
-import { CameraIcon, LockIcon, ScreenIcon, VideoLogo } from '@/components/Icons';
 import { cn } from '@/lib/utils';
 
 /** Client-side room code generator, matching the server's alphabet. */
@@ -15,6 +15,17 @@ function generateRoomCode(length = 8): string {
   for (const byte of bytes) out += alphabet[byte % alphabet.length];
   return out;
 }
+
+const TICKER = [
+  'No sign-up',
+  'End-to-end encrypted',
+  'Up to 8 people',
+  'Screen sharing',
+  'Live reactions',
+  'Runs in your browser',
+  'Nothing recorded',
+  'Open source',
+];
 
 export function Home() {
   const navigate = useNavigate();
@@ -38,128 +49,141 @@ export function Home() {
   };
 
   return (
-    <main className="aurora relative flex min-h-dvh flex-col">
-      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
+    <main className="scheme-light grain relative flex min-h-dvh flex-col bg-paper text-soot">
+      <header className="flex items-center justify-between px-5 py-5 sm:px-8">
         <div className="flex items-center gap-2.5">
-          <VideoLogo className="h-6 w-6 text-accent" />
+          <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-soot">
+            <VideoLogo className="h-4 w-4 text-accent" />
+          </span>
           <span className="text-lg font-semibold tracking-tight">VChat</span>
         </div>
         <a
           href="https://github.com/rishabhshuklax/VChat"
           target="_blank"
           rel="noreferrer noopener"
-          className="text-sm text-ink-muted transition-colors hover:text-ink"
+          className="text-sm text-soot-muted underline-offset-4 transition-colors hover:text-soot hover:underline"
         >
           Source
         </a>
       </header>
 
-      <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10">
-        <div className="w-full max-w-5xl">
-          <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
-            <div className="animate-rise">
-              <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs font-medium text-ink-muted backdrop-blur">
-                <span className="h-1.5 w-1.5 rounded-full bg-positive" />
-                Peer-to-peer · no accounts · nothing recorded
-              </p>
+      <section className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-5 py-10 sm:px-8">
+        {/* Editorial ornament — a slowly turning asterisk, nothing more. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-2 right-2 animate-spin-slow font-display text-[7rem] leading-none text-accent select-none sm:top-6 sm:right-10 sm:text-[11rem]"
+        >
+          ✳
+        </span>
 
-              <h1 className="text-4xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-                Video calls that
-                <span className="bg-gradient-to-r from-accent-bright to-[#5eb0ff] bg-clip-text text-transparent">
-                  {' '}
-                  just work
-                </span>
-                .
-              </h1>
+        <p
+          className="flex animate-rise items-center gap-2 font-mono text-[11px] tracking-[0.22em] uppercase"
+          style={{ animationDelay: '0ms' }}
+        >
+          <span className="h-2 w-2 bg-accent" />
+          Peer-to-peer video calls
+        </p>
 
-              <p className="mt-5 max-w-md text-base leading-relaxed text-ink-muted text-pretty">
-                Share a link, talk face to face. Video and audio travel directly between
-                participants — the server only introduces you.
-              </p>
+        <h1
+          className="mt-5 max-w-[13ch] animate-rise font-display text-[clamp(3.1rem,12vw,7rem)] leading-[0.92] tracking-tight text-balance"
+          style={{ animationDelay: '70ms' }}
+        >
+          Face to face, in{' '}
+          <span className="inline-block -rotate-1 rounded-lg bg-accent px-3 italic">
+            eight seconds.
+          </span>
+        </h1>
 
-              <ul className="mt-8 grid gap-3 sm:grid-cols-3">
-                {[
-                  { icon: CameraIcon, label: 'HD video', detail: 'Up to 8 people' },
-                  { icon: ScreenIcon, label: 'Screen share', detail: 'One click' },
-                  { icon: LockIcon, label: 'Encrypted', detail: 'DTLS-SRTP' },
-                ].map((feature) => (
-                  <li
-                    key={feature.label}
-                    className="rounded-xl border border-line bg-surface/50 p-3 backdrop-blur"
-                  >
-                    <feature.icon className="mb-2 h-4 w-4 text-accent" />
-                    <p className="text-sm font-medium">{feature.label}</p>
-                    <p className="text-xs text-ink-faint">{feature.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
+        <p
+          className="mt-6 max-w-md animate-rise text-lg leading-relaxed text-pretty text-soot-muted"
+          style={{ animationDelay: '140ms' }}
+        >
+          One link, no accounts, nothing installed. Your video travels browser-to-browser — the
+          server only makes the introduction.
+        </p>
 
-            <div
-              className="glass rounded-2xl border border-line p-6 shadow-2xl animate-rise sm:p-8"
-              style={{ animationDelay: '80ms', animationFillMode: 'backwards' }}
+        <div
+          className="mt-9 flex animate-rise flex-col gap-5 sm:flex-row sm:items-center"
+          style={{ animationDelay: '210ms' }}
+        >
+          <Button variant="accent" size="xl" onClick={start} className="w-full sm:w-auto">
+            <VideoLogo className="h-5 w-5" />
+            Start a call
+          </Button>
+
+          <form onSubmit={join} noValidate className="flex-1 sm:max-w-xs">
+            <label
+              htmlFor="room-code"
+              className="mb-1.5 block font-mono text-[11px] tracking-[0.18em] text-soot-muted uppercase"
             >
-              <h2 className="text-lg font-semibold">Start or join a call</h2>
-              <p className="mt-1 text-sm text-ink-muted">No download, no sign-up.</p>
-
-              <Button variant="primary" size="lg" onClick={start} className="mt-6 w-full">
-                <VideoLogo className="h-5 w-5" />
-                New meeting
-              </Button>
-
-              <div className="my-6 flex items-center gap-3">
-                <span className="h-px flex-1 bg-line" />
-                <span className="text-xs font-medium text-ink-faint">OR JOIN ONE</span>
-                <span className="h-px flex-1 bg-line" />
-              </div>
-
-              <form onSubmit={join} noValidate>
-                <label
-                  htmlFor="room-code"
-                  className="mb-1.5 block text-xs font-medium text-ink-muted"
-                >
-                  Room code
-                </label>
-                <input
-                  id="room-code"
-                  value={code}
-                  onChange={(event) => {
-                    setCode(event.target.value);
-                    setError(null);
-                  }}
-                  placeholder="abcd-efgh"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  aria-invalid={error !== null}
-                  aria-describedby={error ? 'room-code-error' : undefined}
-                  className={cn(
-                    'w-full rounded-xl border bg-surface-2 px-4 py-3 font-mono text-base tracking-wider',
-                    'placeholder:text-ink-faint/60 focus:outline-none',
-                    error ? 'border-danger' : 'border-line focus:border-accent',
-                  )}
-                />
-                {error && (
-                  <p id="room-code-error" className="mt-2 text-xs text-danger">
-                    {error}
-                  </p>
+              Have a code?
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="room-code"
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value);
+                  setError(null);
+                }}
+                placeholder="abcd-efgh"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-invalid={error !== null}
+                aria-describedby={error ? 'room-code-error' : undefined}
+                className={cn(
+                  'h-13 w-full rounded-full border bg-white/60 px-5 font-mono text-base tracking-wider',
+                  'placeholder:text-soot-faint/70 focus:outline-none',
+                  error ? 'border-danger' : 'border-soot/20 focus:border-soot',
                 )}
-                <Button
-                  type="submit"
-                  size="lg"
-                  disabled={normalizeRoomCode(code).length === 0}
-                  className="mt-3 w-full"
-                >
-                  Join {code.trim() && `“${formatRoomCode(code)}”`}
-                </Button>
-              </form>
+              />
+              <button
+                type="submit"
+                aria-label="Join room"
+                disabled={normalizeRoomCode(code).length === 0}
+                className="flex h-13 w-13 shrink-0 items-center justify-center rounded-full bg-soot text-paper transition-all duration-200 [transition-timing-function:var(--ease-spring)] hover:scale-105 active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+              >
+                <ArrowRightIcon className="h-5 w-5" />
+              </button>
             </div>
+            {error && (
+              <p id="room-code-error" className="mt-2 text-xs text-danger">
+                {error}
+              </p>
+            )}
+          </form>
+        </div>
+
+        <dl
+          className="mt-12 flex animate-rise flex-wrap gap-x-8 gap-y-3"
+          style={{ animationDelay: '280ms' }}
+        >
+          {[
+            { icon: LockIcon, term: 'DTLS-SRTP', detail: 'encrypted end to end' },
+            { icon: PeopleIcon, term: 'Up to 8', detail: 'full mesh, no server mix' },
+            { icon: ScreenIcon, term: 'One click', detail: 'to share your screen' },
+          ].map((item) => (
+            <div key={item.term} className="flex items-center gap-2.5">
+              <item.icon className="h-4 w-4 text-soot-muted" />
+              <dt className="font-mono text-xs font-bold tracking-wide">{item.term}</dt>
+              <dd className="text-xs text-soot-muted">{item.detail}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <footer className="border-t border-soot/10 py-4">
+        <div className="marquee" aria-hidden="true">
+          <div className="marquee-track font-mono text-[11px] tracking-[0.22em] text-soot-muted uppercase">
+            {[...TICKER, ...TICKER].map((item, index) => (
+              <span key={index} className="flex items-center">
+                <span className="px-5">{item}</span>
+                <span className="text-accent-deep">✳</span>
+              </span>
+            ))}
           </div>
         </div>
-      </div>
-
-      <footer className="px-6 pb-6 text-center text-xs text-ink-faint sm:px-10">
-        Media is encrypted end to end between participants and never touches the server.
       </footer>
     </main>
   );

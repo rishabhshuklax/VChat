@@ -272,6 +272,30 @@ describe('chat and state', () => {
     expect((await ana.next('chat')).message.text).toBe('hello everyone');
   });
 
+  it('broadcasts a reaction to everyone, sender included', async () => {
+    const ana = await connect();
+    const anaWelcome = await ana.join('reactive', 'Ana');
+    const ben = await connect();
+    await ben.join('reactive', 'Ben');
+
+    ana.send({ type: 'reaction', emoji: '🎉' });
+
+    const forBen = await ben.next('reaction');
+    expect(forBen.emoji).toBe('🎉');
+    expect(forBen.from).toBe(anaWelcome.self.id);
+    expect(forBen.name).toBe('Ana');
+
+    // The sender animates from the same broadcast, not a local echo.
+    expect((await ana.next('reaction')).id).toBe(forBen.id);
+  });
+
+  it('rejects a blank reaction', async () => {
+    const ana = await connect();
+    await ana.join('reactive', 'Ana');
+    ana.sendRaw(JSON.stringify({ type: 'reaction', emoji: '   ' }));
+    expect((await ana.next('error')).code).toBe(ERROR_CODES.INVALID_MESSAGE);
+  });
+
   it('broadcasts a mute to other peers only', async () => {
     const ana = await connect();
     const anaWelcome = await ana.join('stateful', 'Ana');

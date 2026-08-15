@@ -206,6 +206,16 @@ try {
     stateEvent.peerId === anaWelcome.self.id && stateEvent.state.audio === false,
   );
 
+  // --- Reactions ----------------------------------------------------------
+  ana.send({ type: 'reaction', emoji: '🎉' });
+  const reaction = await ben.next('reaction');
+  check(
+    'reaction relayed to the room, sender included',
+    reaction.emoji === '🎉' &&
+      reaction.name === 'Ana' &&
+      (await ana.next('reaction')).id === reaction.id,
+  );
+
   // --- Latency ------------------------------------------------------------
   const pingSentAt = Date.now();
   ana.send({ type: 'ping', ts: pingSentAt });

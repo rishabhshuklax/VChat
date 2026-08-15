@@ -48,6 +48,13 @@ export interface Notice {
   text: string;
 }
 
+/** A live emoji reaction currently animating on the stage. */
+export interface ReactionEvent {
+  id: string;
+  emoji: string;
+  name: string;
+}
+
 export interface CallState {
   status: CallStatus;
   error: { code: string; message: string } | null;
@@ -61,6 +68,7 @@ export interface CallState {
   cameraId: string | null;
   microphoneId: string | null;
   notices: Notice[];
+  reactions: ReactionEvent[];
   /** True while a screen share is being published by this client. */
   presenting: boolean;
 }
@@ -90,6 +98,7 @@ const INITIAL: CallState = {
   cameraId: null,
   microphoneId: null,
   notices: [],
+  reactions: [],
   presenting: false,
 };
 
@@ -314,6 +323,20 @@ export class CallEngine {
               ? this.#state.unread
               : this.#state.unread + 1,
         });
+        break;
+      }
+
+      case 'reaction': {
+        const reaction: ReactionEvent = {
+          id: message.id,
+          emoji: message.emoji,
+          name: message.from === this.#state.selfId ? 'You' : message.name,
+        };
+        this.#set({ reactions: [...this.#state.reactions, reaction] });
+        // Matches the float-up animation length, plus a little slack.
+        setTimeout(() => {
+          this.#set({ reactions: this.#state.reactions.filter((r) => r.id !== reaction.id) });
+        }, 2800);
         break;
       }
 
@@ -585,6 +608,10 @@ export class CallEngine {
     const trimmed = text.trim();
     if (!trimmed) return;
     this.#signaling.send({ type: 'chat', text: trimmed.slice(0, LIMITS.chatText.max) });
+  };
+
+  sendReaction = (emoji: string): void => {
+    this.#signaling.send({ type: 'reaction', emoji });
   };
 
   setChatVisible = (visible: boolean): void => {

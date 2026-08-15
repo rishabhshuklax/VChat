@@ -34,14 +34,36 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** Deterministic accent per participant, so avatars stay stable across renders. */
-export function avatarGradient(seed: string): string {
+/**
+ * Curated earthy palette for avatars — deterministic per participant, and far
+ * more "designed" than random HSL. All pass contrast with cream text.
+ */
+const AVATAR_PALETTE = [
+  '#b3512c', // rust
+  '#77893a', // olive
+  '#3f7059', // pine
+  '#3f6e7e', // petrol
+  '#96684a', // clay
+  '#7e4e63', // plum
+  '#a3842b', // ochre
+  '#5c6b7a', // slate
+] as const;
+
+export function avatarColor(seed: string): string {
   let hash = 0;
   for (let index = 0; index < seed.length; index += 1) {
     hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
   }
-  const hue = hash % 360;
-  return `linear-gradient(135deg, hsl(${hue} 62% 52%), hsl(${(hue + 48) % 360} 62% 40%))`;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length] as string;
+}
+
+/** Small stable hash for deriving per-item animation params (0..1). */
+export function seededUnit(seed: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = Math.imul(hash ^ seed.charCodeAt(index), 16777619);
+  }
+  return ((hash >>> 0) % 1000) / 1000;
 }
 
 export function initials(name: string): string {
@@ -54,6 +76,17 @@ export function initials(name: string): string {
 
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** 65s → "1:05" · 3 665s → "1:01:05". For the in-call timer. */
+export function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 /**

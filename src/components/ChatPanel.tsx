@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { LIMITS } from '@shared/protocol';
 import type { CallState } from '@/lib/call-engine';
-import { avatarGradient, cn, formatTime, initials } from '@/lib/utils';
+import { avatarColor, cn, formatTime, initials } from '@/lib/utils';
 import { ChatIcon, CloseIcon, SendIcon } from './Icons';
 
 interface ChatPanelProps {
@@ -38,7 +38,7 @@ export function ChatPanel({ state, onSend, onClose }: ChatPanelProps) {
   };
 
   return (
-    <aside className="flex h-full w-full flex-col bg-surface lg:border-l lg:border-line">
+    <aside className="flex h-full w-full flex-col bg-surface">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ChatIcon className="h-4 w-4 text-ink-muted" />
@@ -85,7 +85,7 @@ export function ChatPanel({ state, onSend, onClose }: ChatPanelProps) {
                 {!grouped && (
                   <div
                     className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                    style={{ background: avatarGradient(message.from) }}
+                    style={{ background: avatarColor(message.from) }}
                   >
                     {initials(message.name)}
                   </div>
@@ -142,7 +142,7 @@ export function ChatPanel({ state, onSend, onClose }: ChatPanelProps) {
             className={cn(
               'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all',
               draft.trim()
-                ? 'bg-accent text-white hover:bg-accent-bright'
+                ? 'bg-accent text-soot hover:bg-accent-deep'
                 : 'bg-surface-3 text-ink-faint',
             )}
           >

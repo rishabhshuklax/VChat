@@ -169,3 +169,18 @@ export const SpinnerIcon = (props: IconProps) => (
     <path d="M12 3a9 9 0 1 0 9 9" />
   </Icon>
 );
+
+export const SmileIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="9.25" />
+    <path d="M8.4 14.2c.9 1.2 2.2 1.9 3.6 1.9s2.7-.7 3.6-1.9" />
+    <path d="M9 9.4h.01M15 9.4h.01" strokeWidth={2.4} />
+  </Icon>
+);
+
+export const ArrowRightIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 12h15" />
+    <path d="m13.5 5.5 6.5 6.5-6.5 6.5" />
+  </Icon>
+);

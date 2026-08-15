@@ -75,6 +75,17 @@ async function joinAs(context, name) {
   return page;
 }
 
+/**
+ * In-call chrome auto-hides after a few idle seconds. A real user wakes it by
+ * moving the pointer or touching the screen; synthetic clicks do neither, so
+ * nudge the mouse before pressing any control.
+ */
+async function wake(page) {
+  await page.mouse.move(200, 200);
+  await page.mouse.move(220, 210);
+  await page.waitForTimeout(350);
+}
+
 /** Reports every <video> that is decoding frames right now. */
 function playingVideos(page) {
   return page.evaluate(() =>
@@ -198,18 +209,31 @@ try {
   check('no peer connection failures logged', failures === 0);
 
   // --- Chat ---------------------------------------------------------------
+  await wake(alicePage);
   await alicePage.getByRole('button', { name: 'Chat (C)' }).click();
   await alicePage.getByPlaceholder('Send a message').fill('hello from alice');
   await alicePage.getByPlaceholder('Send a message').press('Enter');
 
+  await wake(bobPage);
   await bobPage.getByRole('button', { name: 'Chat (C)' }).click();
   await waitFor(async () => (await bobPage.getByText('hello from alice').count()) > 0, {
     label: 'chat delivery',
   });
   check('chat message delivered between peers', true);
 
+  // --- Reactions ----------------------------------------------------------
+  await wake(alicePage);
+  await alicePage.getByRole('button', { name: 'Reactions' }).click();
+  await alicePage.getByRole('button', { name: 'React 🎉' }).click();
+  await waitFor(async () => (await bobPage.getByText('🎉').count()) > 0, {
+    label: 'reaction to reach Bob',
+  });
+  check('emoji reaction delivered to the other peer', true);
+
   // --- Mute propagation ---------------------------------------------------
+  await wake(alicePage);
   await alicePage.getByRole('button', { name: 'Mute microphone (M)' }).click();
+  await wake(bobPage);
   await bobPage.getByRole('button', { name: 'Participants (P)' }).click();
   await waitFor(
     async () => {
@@ -226,6 +250,7 @@ try {
   console.log('\n  screenshots: e2e-alice.png, e2e-bob.png');
 
   // --- Leave --------------------------------------------------------------
+  await wake(bobPage);
   await bobPage.getByRole('button', { name: 'Leave call' }).click();
   await waitFor(async () => (await alicePage.getByText('1 person').count()) > 0, {
     label: 'Alice to see Bob leave',

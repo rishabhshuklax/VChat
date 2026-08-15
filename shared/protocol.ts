@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 /** Wire protocol version. Bumped on any breaking change to the schemas below. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Hard ceiling on a single WebSocket frame. SDP blobs are the largest thing we carry. */
 export const MAX_MESSAGE_BYTES = 256 * 1024;
@@ -147,6 +147,11 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('chat'),
     text: z.string().trim().min(LIMITS.chatText.min).max(LIMITS.chatText.max),
   }),
+  z.object({
+    type: z.literal('reaction'),
+    /** A single emoji. 16 chars covers multi-codepoint sequences (ZWJ, skin tones). */
+    emoji: z.string().trim().min(1).max(16),
+  }),
   z.object({ type: z.literal('leave') }),
   z.object({ type: z.literal('ping'), ts: z.number().optional() }),
 ]);
@@ -229,6 +234,15 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('chat'),
     message: chatMessageSchema,
+  }),
+  z.object({
+    type: z.literal('reaction'),
+    /** Server-assigned id so clients can key the animation. */
+    id: z.string(),
+    from: peerIdSchema,
+    name: displayNameSchema,
+    emoji: z.string().max(16),
+    ts: z.number().int().nonnegative(),
   }),
   z.object({
     type: z.literal('error'),

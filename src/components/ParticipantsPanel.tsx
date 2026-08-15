@@ -1,6 +1,6 @@
 import { LIMITS } from '@shared/protocol';
 import type { CallState } from '@/lib/call-engine';
-import { avatarGradient, cn, initials } from '@/lib/utils';
+import { avatarColor, cn, initials } from '@/lib/utils';
 import { CameraOffIcon, CloseIcon, MicIcon, MicOffIcon, PeopleIcon, ScreenIcon } from './Icons';
 
 interface ParticipantsPanelProps {
@@ -10,7 +10,7 @@ interface ParticipantsPanelProps {
 
 export function ParticipantsPanel({ state, onClose }: ParticipantsPanelProps) {
   return (
-    <aside className="flex h-full w-full flex-col bg-surface lg:border-l lg:border-line">
+    <aside className="flex h-full w-full flex-col bg-surface">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <PeopleIcon className="h-4 w-4 text-ink-muted" />
@@ -38,7 +38,7 @@ export function ParticipantsPanel({ state, onClose }: ParticipantsPanelProps) {
             <div className="relative shrink-0">
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-                style={{ background: avatarGradient(participant.id) }}
+                style={{ background: avatarColor(participant.id) }}
               >
                 {initials(participant.name)}
               </div>
@@ -62,10 +62,10 @@ export function ParticipantsPanel({ state, onClose }: ParticipantsPanelProps) {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5 text-ink-faint">
-              {participant.state.screen && <ScreenIcon className="h-4 w-4 text-accent-bright" />}
+              {participant.state.screen && <ScreenIcon className="h-4 w-4 text-accent" />}
               {!participant.state.video && <CameraOffIcon className="h-4 w-4" />}
               {participant.state.audio ? (
-                <MicIcon className={cn('h-4 w-4', participant.speaking && 'text-accent-bright')} />
+                <MicIcon className={cn('h-4 w-4', participant.speaking && 'text-accent')} />
               ) : (
                 <MicOffIcon className="h-4 w-4 text-danger" />
               )}
