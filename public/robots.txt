@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /$
+# Room URLs are private invites and must never be indexed.
+Disallow: /r/

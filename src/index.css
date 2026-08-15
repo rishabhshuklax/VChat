@@ -1,0 +1,150 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens. The palette is deliberately narrow: one accent, one surface
+ * ramp, and semantic colours for status. A video call is mostly other people's
+ * faces, so the interface stays dark and low-chroma and lets the video carry
+ * the colour.
+ */
+@theme {
+  --color-canvas: #07080c;
+  --color-surface: #0e1017;
+  --color-surface-2: #151824;
+  --color-surface-3: #1d2130;
+  --color-line: #262b3b;
+  --color-line-bright: #363c52;
+
+  --color-ink: #e9ebf2;
+  --color-ink-muted: #949bb2;
+  --color-ink-faint: #626a82;
+
+  --color-accent: #7c5cff;
+  --color-accent-bright: #9a83ff;
+  --color-accent-dim: #4c3aa8;
+
+  --color-positive: #2dd4a7;
+  --color-caution: #f5a524;
+  --color-danger: #f2585f;
+
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+
+  --animate-rise: rise 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade: fade 0.2s ease-out;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@layer base {
+  * {
+    min-width: 0;
+  }
+
+  html {
+    scrollbar-gutter: stable;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Dynamic viewport unit: mobile browser chrome must not clip the call controls. */
+    min-height: 100dvh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-bright);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Respect the OS setting rather than animating regardless. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-line-bright);
+    background-clip: content-box;
+  }
+}
+
+@utility glass {
+  background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* Ambient wash behind the landing page. */
+@utility aurora {
+  background-image:
+    radial-gradient(
+      58rem 32rem at 12% -8%,
+      color-mix(in oklab, var(--color-accent) 26%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      48rem 30rem at 92% 6%,
+      color-mix(in oklab, #2b7fff 20%, transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      42rem 28rem at 50% 108%,
+      color-mix(in oklab, var(--color-positive) 12%, transparent),
+      transparent 72%
+    );
+}

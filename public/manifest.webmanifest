@@ -1,0 +1,17 @@
+{
+  "name": "VChat",
+  "short_name": "VChat",
+  "description": "Dead simple, cross-platform, peer-to-peer video chat.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07080c",
+  "theme_color": "#07080c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
