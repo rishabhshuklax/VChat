@@ -24,6 +24,12 @@ export interface MeshEvents {
   /** A remote stream became available or changed. */
   onStream: (peerId: string, stream: MediaStream) => void;
   onConnectionState: (peerId: string, state: RTCPeerConnectionState) => void;
+  /**
+   * The remote video track stopped or resumed delivering frames — network
+   * starvation, not departure. The UI softens the frozen frame instead of
+   * pretending nothing is wrong.
+   */
+  onInterruption: (peerId: string, interrupted: boolean) => void;
   sendSignal: (to: string, payload: SignalPayload) => void;
 }
 
@@ -38,6 +44,8 @@ interface PeerEntry {
   videoSender: RTCRtpSender;
   /** Candidates that arrived before the remote description was applied. */
   pendingCandidates: RTCIceCandidateInit[];
+  /** Escalation timers: nudge a wobbly connection, rebuild a dead one. */
+  timers: { disconnected?: ReturnType<typeof setTimeout>; failed?: ReturnType<typeof setTimeout> };
 }
 
 export class PeerMesh {
@@ -80,6 +88,7 @@ export class PeerMesh {
       audioSender: pc.addTransceiver('audio', { direction: 'sendrecv' }).sender,
       videoSender: pc.addTransceiver('video', { direction: 'sendrecv' }).sender,
       pendingCandidates: [],
+      timers: {},
     };
     this.#peers.set(peerId, entry);
 
@@ -130,26 +139,83 @@ export class PeerMesh {
         entry.stream.removeTrack(event.track);
         this.#events.onStream(peerId, entry.stream);
       });
+      if (event.track.kind === 'video') {
+        // 'mute' during an established call means frames stopped arriving.
+        // (Every track also starts muted before the first packet, which is
+        // why the connected-state guard matters.)
+        event.track.addEventListener('mute', () => {
+          if (pc.connectionState === 'connected') this.#events.onInterruption(peerId, true);
+        });
+        event.track.addEventListener('unmute', () => {
+          this.#events.onInterruption(peerId, false);
+        });
+      }
       this.#events.onStream(peerId, entry.stream);
     });
 
     pc.addEventListener('connectionstatechange', () => {
-      this.#events.onConnectionState(peerId, pc.connectionState);
-      // A failed connection is recoverable: an ICE restart re-gathers
-      // candidates without tearing down the media pipeline.
-      if (pc.connectionState === 'failed') {
-        try {
-          pc.restartIce();
-        } catch (error) {
-          console.warn('[mesh] ICE restart failed', error);
-        }
+      const state = pc.connectionState;
+      this.#events.onConnectionState(peerId, state);
+
+      // Recovery is a ladder, not a cliff:
+      //   disconnected 4s  -> ICE restart (blips usually self-heal first)
+      //   failed           -> ICE restart immediately
+      //   failed 7s more   -> rebuild the RTCPeerConnection from scratch
+      // Perfect negotiation makes each rung safe from either side.
+      if (state === 'connected') {
+        this.#clearTimers(entry);
+        this.#events.onInterruption(peerId, false);
+      } else if (state === 'disconnected') {
+        entry.timers.disconnected ??= setTimeout(() => {
+          entry.timers.disconnected = undefined;
+          if (pc.connectionState === 'disconnected') this.#restartIce(pc);
+        }, 4000);
+      } else if (state === 'failed') {
+        this.#restartIce(pc);
+        entry.timers.failed ??= setTimeout(() => {
+          entry.timers.failed = undefined;
+          if (pc.connectionState === 'failed') this.#rebuild(peerId);
+        }, 7000);
       }
     });
+  }
+
+  #restartIce(pc: RTCPeerConnection): void {
+    try {
+      pc.restartIce();
+    } catch (error) {
+      console.warn('[mesh] ICE restart failed', error);
+    }
+  }
+
+  #clearTimers(entry: PeerEntry): void {
+    if (entry.timers.disconnected) clearTimeout(entry.timers.disconnected);
+    if (entry.timers.failed) clearTimeout(entry.timers.failed);
+    entry.timers = {};
+  }
+
+  /** Last rung: a fresh RTCPeerConnection when ICE restarts stopped helping. */
+  #rebuild(peerId: string): void {
+    this.removePeer(peerId);
+    this.addPeer(peerId);
+  }
+
+  /**
+   * Called after the signaling channel comes back: any connection that went
+   * stale while our offers and candidates could not travel gets a fresh
+   * round of ICE through the restored channel.
+   */
+  reviveUnhealthy(): void {
+    for (const entry of this.#peers.values()) {
+      const state = entry.pc.connectionState;
+      if (state === 'failed' || state === 'disconnected') this.#restartIce(entry.pc);
+    }
   }
 
   removePeer(peerId: string): void {
     const entry = this.#peers.get(peerId);
     if (!entry) return;
+    this.#clearTimers(entry);
     entry.pc.close();
     for (const track of entry.stream.getTracks()) entry.stream.removeTrack(track);
     this.#peers.delete(peerId);

@@ -30,10 +30,27 @@ const { MAX_MESSAGE_BYTES } = await vite.ssrLoadModule('/shared/protocol.ts');
 
 const store = createRoomStore();
 
+/**
+ * Chaos switch, development only: `/api/debug/outage?ms=3000` severs every
+ * live signaling socket and refuses upgrades for the window. This is how the
+ * e2e suite (and manual QA) proves a signaling outage is survived gracefully —
+ * media keeps flowing, seats are held, and clients resume without churn.
+ */
+let outageUntil = 0;
+
 const httpServer = createHttpServer((request, response) => {
   if (request.url === '/api/ws') {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ service: 'vchat-signaling', status: 'ok', store: store.kind }));
+    return;
+  }
+  if (request.url?.startsWith('/api/debug/outage')) {
+    const ms = Number(new URL(request.url, 'http://localhost').searchParams.get('ms') ?? 2000);
+    outageUntil = Date.now() + ms;
+    for (const client of wss.clients) client.terminate();
+    console.log(`[chaos] signaling outage for ${ms}ms`);
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ outageUntil }));
     return;
   }
   vite.middlewares(request, response);
@@ -49,6 +66,10 @@ const wss = new WebSocketServer({
 httpServer.on('upgrade', (request, socket, head) => {
   const { pathname } = new URL(request.url ?? '/', 'http://localhost');
   if (pathname !== '/api/ws') return;
+  if (Date.now() < outageUntil) {
+    socket.destroy(); // the chaos window is still open
+    return;
+  }
   wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
 });
 

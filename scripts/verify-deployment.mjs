@@ -261,9 +261,11 @@ try {
   );
 
   // --- Departure ----------------------------------------------------------
-  cara.close();
+  // An explicit leave announces immediately; an abrupt close is deliberately
+  // held for a grace window so reconnecting peers never churn the room.
+  cara.send({ type: 'leave' });
   const left = await ana.next('peer-left');
-  check('departures are announced', left.reason === 'disconnected' || left.reason === 'left');
+  check('departures are announced', left.reason === 'left');
 
   // --- Password protection -------------------------------------------------
   const lockedRoom = `${room}locked`;

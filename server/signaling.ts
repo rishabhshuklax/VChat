@@ -41,6 +41,12 @@ export interface SignalingOptions {
   heartbeatIntervalMs?: number;
   /** Peers whose heartbeat is older than this are evicted from the roster. */
   peerTimeoutMs?: number;
+  /**
+   * How long a peer keeps its seat after its socket closes without a leave.
+   * Planned reconnects and network blips resume inside this window with no
+   * visible churn for anyone; only a peer that stays gone is announced.
+   */
+  disconnectGraceMs?: number;
 }
 
 interface Session {
@@ -59,6 +65,7 @@ const DEFAULTS = {
   connectionTtlMs: 800_000,
   heartbeatIntervalMs: 30_000,
   peerTimeoutMs: 90_000,
+  disconnectGraceMs: 12_000,
 } as const;
 
 export function attachSignaling(
@@ -69,11 +76,12 @@ export function attachSignaling(
   const connectionTtlMs = options.connectionTtlMs ?? DEFAULTS.connectionTtlMs;
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULTS.heartbeatIntervalMs;
   const peerTimeoutMs = options.peerTimeoutMs ?? DEFAULTS.peerTimeoutMs;
+  const disconnectGraceMs = options.disconnectGraceMs ?? DEFAULTS.disconnectGraceMs;
 
   /** Peers whose socket this instance owns. Envelope delivery resolves through here. */
   const localSessions = new Map<string, Session>();
 
-  const joinLimiter = new RateLimiter(10, 0.5);
+  const joinLimiter = new RateLimiter(15, 0.5);
   const messageLimiter = new RateLimiter(120, 40);
 
   const iceServers = buildIceServers();
@@ -122,12 +130,10 @@ export function attachSignaling(
     message: Extract<ClientMessage, { type: 'join' }>,
   ): Promise<void> {
     if (!joinLimiter.take(session.ip)) {
-      sendError(
-        session.ws,
-        ERROR_CODES.RATE_LIMITED,
-        'Too many join attempts. Try again shortly.',
-        true,
-      );
+      // Not fatal: a flapping network retrying its resume must never be
+      // punished by having its whole call torn down. The client backs off
+      // and tries again on its own.
+      sendError(session.ws, ERROR_CODES.RATE_LIMITED, 'Too many join attempts. Try again shortly.');
       return;
     }
 
@@ -135,9 +141,16 @@ export function attachSignaling(
     if (session.roomId) await detach(session, 'left');
 
     // Resuming keeps the peer id stable across a reconnect so remote peers do
-    // not have to tear down and rebuild their RTCPeerConnection. Refuse the
-    // resume if that id is currently held by a live socket.
-    if (message.resumeOf && !localSessions.has(message.resumeOf)) {
+    // not have to tear down and rebuild their RTCPeerConnection. If the id is
+    // still held by an older socket, that socket is a zombie the client
+    // abandoned before the server noticed — the newer connection wins.
+    if (message.resumeOf) {
+      const zombie = localSessions.get(message.resumeOf);
+      if (zombie && zombie !== session) {
+        zombie.roomId = null; // its close handler must not announce anything
+        cleanupLocal(zombie);
+        zombie.ws.terminate();
+      }
       session.id = message.resumeOf;
     }
 
@@ -171,17 +184,22 @@ export function attachSignaling(
       connectionDeadline: Date.now() + connectionTtlMs,
     });
 
-    await publish(message.roomId, {
-      to: 'room',
-      exclude: [session.id],
-      message: { type: 'peer-joined', peer: result.peer },
-    });
+    // A resumed peer never left as far as everyone else is concerned;
+    // re-announcing it would make every client churn its tile and toasts.
+    if (!result.rejoined) {
+      await publish(message.roomId, {
+        to: 'room',
+        exclude: [session.id],
+        message: { type: 'peer-joined', peer: result.peer },
+      });
+    }
 
     log.info('peer joined', {
       roomId: message.roomId,
       peerId: session.id,
       peers: result.others.length + 1,
       createdRoom: result.createdRoom,
+      rejoined: result.rejoined,
     });
   }
 
@@ -289,29 +307,74 @@ export function attachSignaling(
   // Lifecycle
   // -------------------------------------------------------------------------
 
-  /** Removes a session from its room and tells everyone else. Safe to call twice. */
+  /** Stops local delivery for a session without touching shared room state. */
+  function cleanupLocal(session: Session): void {
+    if (session.unsubscribe) {
+      void session.unsubscribe();
+      session.unsubscribe = null;
+    }
+    if (localSessions.get(session.id) === session) localSessions.delete(session.id);
+  }
+
+  async function announceLeave(
+    roomId: string,
+    peerId: string,
+    reason: 'left' | 'disconnected' | 'timeout',
+  ): Promise<void> {
+    try {
+      await store.leave(roomId, peerId);
+      await publish(roomId, {
+        to: 'room',
+        exclude: [peerId],
+        message: { type: 'peer-left', peerId, reason },
+      });
+      log.info('peer left', { roomId, peerId, reason });
+    } catch (error) {
+      log.error('leave failed', { roomId, peerId, error: String(error) });
+    }
+  }
+
+  /** Immediate removal: explicit leaves and room switches. Safe to call twice. */
   async function detach(session: Session, reason: 'left' | 'disconnected'): Promise<void> {
     const roomId = session.roomId;
     if (!roomId) return;
     session.roomId = null;
+    cleanupLocal(session);
+    await announceLeave(roomId, session.id, reason);
+  }
 
-    try {
-      await store.leave(roomId, session.id);
-      await publish(roomId, {
-        to: 'room',
-        exclude: [session.id],
-        message: { type: 'peer-left', peerId: session.id, reason },
-      });
-    } catch (error) {
-      log.error('detach failed', { roomId, peerId: session.id, error: String(error) });
-    } finally {
-      if (session.unsubscribe) {
-        await session.unsubscribe();
-        session.unsubscribe = null;
-      }
-      if (localSessions.get(session.id) === session) localSessions.delete(session.id);
-      log.info('peer left', { roomId, peerId: session.id, reason });
-    }
+  const graceTimers = new Set<ReturnType<typeof setTimeout>>();
+
+  /**
+   * A closed socket is not a departed person. The seat is held for a grace
+   * window; if the peer resumes (on any instance — liveness is read from the
+   * store), nobody ever hears about the blip. Only a peer that stays gone is
+   * announced, which is what keeps planned reconnects and flaky networks
+   * from churning every other participant's screen.
+   */
+  function scheduleDisconnect(session: Session): void {
+    const roomId = session.roomId;
+    session.roomId = null;
+    cleanupLocal(session);
+    if (!roomId) return;
+
+    const peerId = session.id;
+    const closedAt = Date.now();
+    const timer = setTimeout(() => {
+      graceTimers.delete(timer);
+      void (async () => {
+        try {
+          const lastSeen = await store.peerLastSeen(roomId, peerId);
+          if (lastSeen === null) return; // already removed (left, swept, room gone)
+          if (lastSeen >= closedAt) return; // resumed somewhere — never happened
+          await announceLeave(roomId, peerId, 'disconnected');
+        } catch (error) {
+          log.error('disconnect grace check failed', { roomId, peerId, error: String(error) });
+        }
+      })();
+    }, disconnectGraceMs);
+    timer.unref?.();
+    graceTimers.add(timer);
   }
 
   wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
@@ -401,7 +464,7 @@ export function attachSignaling(
     });
 
     ws.on('close', () => {
-      void detach(session, 'disconnected');
+      scheduleDisconnect(session);
     });
 
     ws.on('error', (error: Error) => {
@@ -454,6 +517,8 @@ export function attachSignaling(
   return async function shutdown(): Promise<void> {
     clearInterval(heartbeat);
     clearInterval(sweeper);
+    for (const timer of graceTimers) clearTimeout(timer);
+    graceTimers.clear();
     await Promise.all(
       [...localSessions.values()].map((session) => detach(session, 'disconnected')),
     );

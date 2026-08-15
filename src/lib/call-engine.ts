@@ -8,6 +8,7 @@
  * — testable and free of stale-closure bugs.
  */
 import {
+  ERROR_CODES,
   LIMITS,
   type ChatMessage,
   type InkPoint,
@@ -41,6 +42,8 @@ export interface Participant {
   quality: PeerQuality | null;
   level: number;
   speaking: boolean;
+  /** Frames stopped arriving over an established connection — soften, don't hide. */
+  videoInterrupted: boolean;
 }
 
 export interface Notice {
@@ -140,6 +143,10 @@ export class CallEngine {
   #joinOptions: JoinOptions | null = null;
 
   #meterTimer: ReturnType<typeof setInterval> | null = null;
+  /** Debounce before surfacing 'reconnecting': sub-second blips stay invisible. */
+  #reconnectSurfaceTimer: ReturnType<typeof setTimeout> | null = null;
+  #joinRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  #outage = false;
   #qualityTimer: ReturnType<typeof setInterval> | null = null;
   #unsubscribers: Array<() => void> = [];
   #chatVisible = false;
@@ -209,6 +216,9 @@ export class CallEngine {
         microphoneId: options.microphoneId ?? undefined,
       });
       this.#localStream = stream;
+      for (const track of stream.getTracks()) {
+        this.#watchLocalTrack(track, track.kind === 'audio' ? 'audio' : 'video');
+      }
 
       // Reflect what we actually got, not what we asked for.
       this.#localState = {
@@ -258,6 +268,7 @@ export class CallEngine {
       quality: null,
       level: 0,
       speaking: false,
+      videoInterrupted: false,
     };
     this.#set({ participants: [local] });
     if (this.#localStream) this.#meter.attach('local', this.#localStream);
@@ -266,8 +277,30 @@ export class CallEngine {
   #wireSignaling(): void {
     this.#unsubscribers.push(
       this.#signaling.onStatus((status: SignalingStatus) => {
-        if (status === 'reconnecting' && this.#state.status === 'connected') {
-          this.#set({ status: 'reconnecting' });
+        if (status === 'open') {
+          if (this.#reconnectSurfaceTimer) {
+            clearTimeout(this.#reconnectSurfaceTimer);
+            this.#reconnectSurfaceTimer = null;
+          }
+          return;
+        }
+        // Surface a drop only once it has lasted long enough to matter.
+        // Planned socket swaps and sub-second blips resolve inside this
+        // window and the interface never so much as flickers.
+        if (
+          status === 'reconnecting' &&
+          this.#state.status === 'connected' &&
+          !this.#reconnectSurfaceTimer
+        ) {
+          this.#reconnectSurfaceTimer = setTimeout(() => {
+            this.#reconnectSurfaceTimer = null;
+            if (this.#signaling.status === 'open') return;
+            this.#set({ status: 'reconnecting' });
+            if (!this.#outage) {
+              this.#outage = true;
+              this.#notify('warning', 'Connection wobbled — reconnecting…');
+            }
+          }, 1500);
         }
       }),
     );
@@ -284,6 +317,15 @@ export class CallEngine {
       case 'welcome': {
         const selfId = message.self.id;
         const firstConnect = this.#state.selfId === null;
+        // The resume was refused (rare): our identity changed, so every
+        // negotiation role changed with it. A stale mesh would deadlock on
+        // glare; rebuild it cleanly.
+        const identityChanged = !firstConnect && this.#state.selfId !== selfId;
+
+        if (this.#outage) {
+          this.#outage = false;
+          this.#notify('success', 'Reconnected');
+        }
 
         this.#set({
           status: 'connected',
@@ -295,7 +337,7 @@ export class CallEngine {
         this.#noteName(message.self.name);
         for (const peer of message.peers) this.#noteName(peer.name);
 
-        if (!this.#mesh || firstConnect) {
+        if (!this.#mesh || firstConnect || identityChanged) {
           this.#mesh?.close();
           this.#mesh = new PeerMesh(selfId, message.iceServers as RTCIceServer[], {
             sendSignal: (to, payload) => this.#signaling.send({ type: 'signal', to, payload }),
@@ -306,19 +348,28 @@ export class CallEngine {
             onConnectionState: (peerId, state) => {
               this.#patchParticipant(peerId, { connection: state });
             },
+            onInterruption: (peerId, interrupted) => {
+              this.#patchParticipant(peerId, { videoInterrupted: interrupted });
+            },
           });
           this.#publishLocalTracks();
         }
 
         this.#syncRoster(message.peers);
+        // Connections that went stale while signaling was down get a fresh
+        // round of ICE now that offers can travel again.
+        this.#mesh?.reviveUnhealthy();
         break;
       }
 
       case 'peer-joined': {
+        const alreadyHere = this.#state.participants.some(
+          (participant) => participant.id === message.peer.id,
+        );
         this.#addParticipant(message.peer);
         this.#noteName(message.peer.name);
         this.#mesh?.addPeer(message.peer.id);
-        this.#notify('info', `${message.peer.name} joined`);
+        if (!alreadyHere) this.#notify('info', `${message.peer.name} joined`);
         break;
       }
 
@@ -382,6 +433,20 @@ export class CallEngine {
       }
 
       case 'error': {
+        // A throttled (re)join is a pause, not a verdict — retry quietly
+        // instead of surfacing an error for something the network did.
+        if (
+          !message.fatal &&
+          message.code === ERROR_CODES.RATE_LIMITED &&
+          this.#state.status !== 'connected'
+        ) {
+          this.#joinRetryTimer ??= setTimeout(() => {
+            this.#joinRetryTimer = null;
+            this.#signaling.rejoin();
+          }, 4000);
+          break;
+        }
+
         this.#set({
           error: { code: message.code, message: message.message },
           ...(message.fatal ? { status: 'error' as const } : {}),
@@ -435,6 +500,7 @@ export class CallEngine {
       quality: null,
       level: 0,
       speaking: false,
+      videoInterrupted: false,
     };
     this.#set({ participants: [...this.#state.participants, participant] });
   }
@@ -450,6 +516,26 @@ export class CallEngine {
   // -------------------------------------------------------------------------
   // Local media controls
   // -------------------------------------------------------------------------
+
+  /**
+   * A local device can die mid-call — unplugged, grabbed by another app, or
+   * revoked by the OS. Reflect it honestly instead of freezing: flip the
+   * state, tell the peers, tell the user.
+   */
+  #watchLocalTrack(track: MediaStreamTrack, kind: 'audio' | 'video'): void {
+    track.addEventListener('ended', () => {
+      // stop() does not fire 'ended'; this is only external loss.
+      this.#localStream?.removeTrack(track);
+      this.#mesh?.setLocalTrack(kind, null);
+      this.#localState = { ...this.#localState, [kind === 'audio' ? 'audio' : 'video']: false };
+      this.#patchParticipant('local', { stream: this.#localStream });
+      this.#pushState();
+      this.#notify(
+        'warning',
+        kind === 'audio' ? 'Your microphone was disconnected.' : 'Your camera was disconnected.',
+      );
+    });
+  }
 
   #publishLocalTracks(): void {
     const stream = this.#localStream;
@@ -486,6 +572,7 @@ export class CallEngine {
       if (!track) return;
       this.#localStream ??= new MediaStream();
       this.#localStream.addTrack(track);
+      this.#watchLocalTrack(track, 'audio');
       this.#mesh?.setLocalTrack('audio', track);
       this.#meter.attach('local', this.#localStream);
       this.#localState = { ...this.#localState, audio: true };
@@ -529,6 +616,7 @@ export class CallEngine {
       if (!track) throw new Error('no video track');
       this.#localStream ??= new MediaStream();
       this.#localStream.addTrack(track);
+      this.#watchLocalTrack(track, 'video');
       this.#mesh?.setLocalTrack('video', track);
       this.#localState = { ...this.#localState, video: true };
       this.#patchParticipant('local', { stream: this.#localStream });
@@ -621,6 +709,7 @@ export class CallEngine {
         this.#localStream.removeTrack(previous);
       }
       this.#localStream.addTrack(next);
+      this.#watchLocalTrack(next, kind === 'camera' ? 'video' : 'audio');
       this.#mesh?.setLocalTrack(kind === 'camera' ? 'video' : 'audio', next);
 
       if (kind === 'microphone') this.#meter.attach('local', this.#localStream);
@@ -656,6 +745,7 @@ export class CallEngine {
       }
       this.#localStream ??= new MediaStream();
       this.#localStream.addTrack(track);
+      this.#watchLocalTrack(track, 'video');
       this.#mesh?.setLocalTrack('video', track);
 
       this.#localState = { ...this.#localState, video: true };
@@ -773,6 +863,11 @@ export class CallEngine {
 
   #teardown(): void {
     this.#stopTimers();
+    if (this.#reconnectSurfaceTimer) clearTimeout(this.#reconnectSurfaceTimer);
+    if (this.#joinRetryTimer) clearTimeout(this.#joinRetryTimer);
+    this.#reconnectSurfaceTimer = null;
+    this.#joinRetryTimer = null;
+    this.#outage = false;
     this.#mesh?.close();
     this.#mesh = null;
     stopStream(this.#localStream);

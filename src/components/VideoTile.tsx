@@ -50,11 +50,20 @@ function VideoTileImpl({
   }, [participant.stream]);
 
   const showVideo = participant.state.video && Boolean(participant.stream);
+  // Only the states that have never carried media get the full overlay. A
+  // 'disconnected' blip usually heals in seconds with frames still flowing —
+  // hiding live video behind a spinner would manufacture a broken moment.
   const connecting =
     !participant.isLocal &&
-    (participant.connection === 'new' ||
-      participant.connection === 'connecting' ||
-      participant.connection === 'disconnected');
+    (participant.connection === 'new' || participant.connection === 'connecting');
+  // Frames stalled or the transport is wobbling: keep the last picture,
+  // soften it, say so quietly.
+  const degraded =
+    !participant.isLocal &&
+    !connecting &&
+    (participant.videoInterrupted ||
+      participant.connection === 'disconnected' ||
+      participant.connection === 'failed');
 
   // Live mic level drives a tiny equalizer in the name chip. Muted → no bars.
   const level = participant.state.audio ? participant.level : 0;
@@ -105,6 +114,20 @@ function VideoTileImpl({
         <div className="absolute inset-0 flex items-center justify-center bg-canvas/60 backdrop-blur-sm">
           <span className="relative flex h-12 w-12 items-center justify-center ring-pulse">
             <span className="h-2 w-2 rounded-full bg-accent" />
+          </span>
+        </div>
+      )}
+
+      {degraded && (
+        <div
+          className={cn(
+            'absolute inset-0 flex items-end justify-center pb-10 animate-fade',
+            showVideo && 'bg-canvas/25 backdrop-blur-[6px]',
+          )}
+        >
+          <span className="flex items-center gap-2 rounded-full bg-black/60 px-3.5 py-1.5 text-xs text-white/90 backdrop-blur-md">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-caution" />
+            Connection hiccup — hold on…
           </span>
         </div>
       )}

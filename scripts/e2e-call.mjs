@@ -278,6 +278,62 @@ try {
   );
   check('mute state broadcast to peers', true);
 
+  // --- Graceful signaling outage -------------------------------------------
+  // Sever every signaling socket and block reconnects for ~3.2s (chaos switch
+  // in the dev server), then require that the experience never broke: media
+  // kept flowing throughout, the outage surfaced calmly, both sides resumed
+  // with zero churn, and the call fully works afterwards.
+  const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1');
+  if (isLocal) {
+    await alicePage.evaluate(() => fetch('/api/debug/outage?ms=3200'));
+
+    // Media is peer-to-peer: it must survive the signaling outage untouched.
+    const during = (await playingVideos(alicePage)).map((video) => video.time);
+    await alicePage.waitForTimeout(1500);
+    const later = (await playingVideos(alicePage)).map((video) => video.time);
+    check(
+      'video keeps flowing while signaling is down',
+      later.some((time, index) => time > (during[index] ?? 0) + 0.2),
+    );
+
+    // The outage lasts long enough to surface — and does so calmly.
+    await waitFor(async () => (await alicePage.getByText(/reconnecting/i).count()) > 0, {
+      label: 'the calm outage notice',
+      timeout: 6000,
+    });
+    check('outage surfaces as a calm notice, not a broken screen', true);
+
+    await waitFor(async () => (await alicePage.getByText('Reconnected').count()) > 0, {
+      label: 'the Reconnected toast',
+      timeout: 12_000,
+    });
+    check('both sides resume automatically', true);
+
+    await waitFor(async () => (await alicePage.getByText('2 people').count()) > 0, {
+      label: 'roster intact after the outage',
+    });
+    check('roster intact — nobody was dropped', true);
+
+    // Resumes are silent: no join/leave announcements anywhere.
+    await alicePage.waitForTimeout(600);
+    const churn =
+      (await bobPage.getByText(/ joined| left/).count()) +
+      (await alicePage.getByText(/ joined| left/).count());
+    check('zero join/leave churn from the resume', churn === 0, `${churn} announcements`);
+
+    // The call still fully works afterwards.
+    await wake(bobPage);
+    await bobPage.getByRole('button', { name: 'Chat (C)' }).click();
+    await wake(alicePage);
+    await alicePage.getByRole('button', { name: 'Chat (C)' }).click(); // Esc closed it earlier
+    await alicePage.getByPlaceholder('Send a message').fill('after the storm');
+    await alicePage.getByPlaceholder('Send a message').press('Enter');
+    await waitFor(async () => (await bobPage.getByText('after the storm').count()) > 0, {
+      label: 'chat delivery after recovery',
+    });
+    check('chat flows normally after recovery', true);
+  }
+
   // --- Screenshots --------------------------------------------------------
   await alicePage.screenshot({ path: 'e2e-alice.png' });
   await bobPage.screenshot({ path: 'e2e-bob.png' });

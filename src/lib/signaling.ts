@@ -31,11 +31,24 @@ export function signalingUrl(): string {
   return `${protocol}//${window.location.host}/api/ws`;
 }
 
+/**
+ * Message types worth holding onto while the socket is down. Signals carry
+ * negotiation that would otherwise break the mesh permanently; state and chat
+ * are things a person explicitly did. Reactions and ink are ephemeral by
+ * design and are simply dropped.
+ */
+const QUEUEABLE = new Set<ClientMessage['type']>(['signal', 'state', 'chat']);
+const QUEUE_LIMIT = 200;
+
 export class SignalingClient {
   #ws: WebSocket | null = null;
   #status: SignalingStatus = 'idle';
   #attempt = 0;
   #closedByUser = false;
+  #plannedSwap = false;
+  #netListenersInstalled = false;
+  /** Held while disconnected; flushed once the server has accepted our join. */
+  readonly #pending: ClientMessage[] = [];
 
   #reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   #deadlineTimer: ReturnType<typeof setTimeout> | null = null;
@@ -74,7 +87,30 @@ export class SignalingClient {
 
   connect(): void {
     this.#closedByUser = false;
+    this.#installNetListeners();
     this.#open();
+  }
+
+  /**
+   * The browser knows about connectivity before any backoff timer does.
+   * Coming back online — or the tab becoming visible again on a phone —
+   * skips the wait and reconnects immediately.
+   */
+  #installNetListeners(): void {
+    if (this.#netListenersInstalled) return;
+    this.#netListenersInstalled = true;
+    const kick = () => {
+      if (this.#closedByUser) return;
+      if (this.#reconnectTimer) {
+        clearTimeout(this.#reconnectTimer);
+        this.#reconnectTimer = null;
+        this.#open();
+      }
+    };
+    window.addEventListener('online', kick);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') kick();
+    });
   }
 
   #setStatus(status: SignalingStatus): void {
@@ -126,12 +162,20 @@ export class SignalingClient {
       }
 
       for (const handler of this.#messageHandlers) handler(message);
+
+      // We are in the room again; anything held during the outage can go.
+      if (message.type === 'welcome') this.#flushPending();
     });
 
     ws.addEventListener('close', () => {
       this.#clearTimers();
       if (this.#closedByUser) {
         this.#setStatus('closed');
+        return;
+      }
+      if (this.#plannedSwap) {
+        this.#plannedSwap = false;
+        this.#open();
         return;
       }
       this.#scheduleReconnect();
@@ -153,6 +197,8 @@ export class SignalingClient {
     const delay = Math.max(5_000, deadline - Date.now() - DEADLINE_MARGIN_MS);
     this.#deadlineTimer = setTimeout(() => {
       if (this.#closedByUser) return;
+      // A planned swap, not a failure: reconnect instantly, skip backoff.
+      this.#plannedSwap = true;
       this.#ws?.close(1000, 'deadline');
     }, delay);
   }
@@ -178,12 +224,34 @@ export class SignalingClient {
 
   send(message: ClientMessage): void {
     const ws = this.#ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      // Hold what matters; a blip must not eat a renegotiation or a message
+      // someone typed. Flushed right after the next successful join.
+      if (QUEUEABLE.has(message.type)) {
+        this.#pending.push(message);
+        if (this.#pending.length > QUEUE_LIMIT) this.#pending.shift();
+      }
+      return;
+    }
     ws.send(encode(message));
+  }
+
+  #flushPending(): void {
+    if (this.#pending.length === 0) return;
+    const ws = this.#ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    for (const message of this.#pending.splice(0)) ws.send(encode(message));
+  }
+
+  /** Re-sends the join message; used to retry after a non-fatal rejection. */
+  rejoin(): void {
+    const join = this.#joinFactory?.();
+    if (join) this.send(join);
   }
 
   close(): void {
     this.#closedByUser = true;
+    this.#pending.length = 0;
     this.#clearTimers();
     this.send({ type: 'leave' });
     this.#ws?.close(1000, 'left');

@@ -89,6 +89,7 @@ export class MemoryRoomStore implements RoomStore {
     }
 
     const now = Date.now();
+    const rejoined = room.peers.has(peerId);
     const peer: MemoryPeer = {
       id: peerId,
       name: this.#uniqueName(room, name, peerId),
@@ -103,7 +104,7 @@ export class MemoryRoomStore implements RoomStore {
       .sort((a, b) => a.joinedAt - b.joinedAt)
       .map(stripInternal);
 
-    return { ok: true, peer: stripInternal(peer), others, createdRoom };
+    return { ok: true, peer: stripInternal(peer), others, createdRoom, rejoined };
   }
 
   /**
@@ -146,6 +147,10 @@ export class MemoryRoomStore implements RoomStore {
   async heartbeat(roomId: string, peerId: string): Promise<void> {
     const peer = this.#room(roomId)?.peers.get(peerId);
     if (peer) peer.lastSeen = Date.now();
+  }
+
+  async peerLastSeen(roomId: string, peerId: string): Promise<number | null> {
+    return this.#room(roomId)?.peers.get(peerId)?.lastSeen ?? null;
   }
 
   async publish(roomId: string, envelope: Envelope): Promise<void> {

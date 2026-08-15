@@ -135,6 +135,32 @@ for (const backend of backends) {
       expect(reused.createdRoom).toBe(true);
     });
 
+    it('reports a rejoin when the peer id is already in the roster', async () => {
+      const first = await store.join(joinRequest(room, { name: 'Ana' }));
+      expect(first.ok).toBe(true);
+      if (!first.ok) return;
+      expect(first.rejoined).toBe(false);
+
+      const again = await store.join(joinRequest(room, { name: 'Ana', peerId: first.peer.id }));
+      expect(again.ok).toBe(true);
+      if (!again.ok) return;
+      expect(again.rejoined).toBe(true);
+      // Still one seat — a resume is not a second participant.
+      expect(await store.peers(room)).toHaveLength(1);
+    });
+
+    it('reports when a peer was last seen', async () => {
+      const before = Date.now();
+      const joined = await store.join(joinRequest(room));
+      expect(joined.ok).toBe(true);
+      if (!joined.ok) return;
+
+      const seen = await store.peerLastSeen(room, joined.peer.id);
+      expect(seen).not.toBeNull();
+      expect(seen ?? 0).toBeGreaterThanOrEqual(before);
+      expect(await store.peerLastSeen(room, uuid())).toBeNull();
+    });
+
     it('updates and broadcasts peer media state', async () => {
       const joined = await store.join(joinRequest(room));
       expect(joined.ok).toBe(true);

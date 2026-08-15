@@ -190,6 +190,7 @@ export class RedisRoomStore implements RoomStore {
     }
 
     const roster = await this.#readPeers(roomId);
+    const rejoined = roster.some((candidate) => candidate.id === peerId);
     const now = Date.now();
     const peer: StoredPeer = {
       id: peerId,
@@ -226,7 +227,7 @@ export class RedisRoomStore implements RoomStore {
     }
 
     const others = roster.filter((candidate) => candidate.id !== peerId).map(strip);
-    return { ok: true, peer: strip(peer), others, createdRoom };
+    return { ok: true, peer: strip(peer), others, createdRoom, rejoined };
   }
 
   async leave(roomId: string, peerId: string): Promise<void> {
@@ -287,6 +288,16 @@ export class RedisRoomStore implements RoomStore {
         .exec();
     } catch {
       // Ignore: a corrupt entry will be swept on its own.
+    }
+  }
+
+  async peerLastSeen(roomId: string, peerId: string): Promise<number | null> {
+    const raw = await this.#redis.hget(this.#peersKey(roomId), peerId);
+    if (!raw) return null;
+    try {
+      return (JSON.parse(raw) as StoredPeer).lastSeen ?? null;
+    } catch {
+      return null;
     }
   }
 

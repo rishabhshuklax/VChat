@@ -28,6 +28,11 @@ export type JoinResult =
       others: Peer[];
       /** True when this join brought the room into existence. */
       createdRoom: boolean;
+      /**
+       * True when this peer id was already in the roster — a reconnect
+       * resuming its identity. The caller must not re-announce it.
+       */
+      rejoined: boolean;
     }
   | { ok: false; code: ErrorCode; message: string };
 
@@ -69,6 +74,13 @@ export interface RoomStore {
 
   /** Refreshes a peer's liveness timestamp so the sweeper does not evict it. */
   heartbeat(roomId: string, peerId: string): Promise<void>;
+
+  /**
+   * When this peer was last seen (join, heartbeat, or state change), or null
+   * if it is not in the room. Lets a disconnect grace timer tell "resumed on
+   * some instance" apart from "really gone".
+   */
+  peerLastSeen(roomId: string, peerId: string): Promise<number | null>;
 
   /** Publishes to every instance holding peers in this room, including this one. */
   publish(roomId: string, envelope: Envelope): Promise<void>;

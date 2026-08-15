@@ -32,7 +32,7 @@ beforeEach(async () => {
   store = new MemoryRoomStore();
   server = createServer();
   wss = new WebSocketServer({ server, perMessageDeflate: false });
-  shutdown = attachSignaling(wss, { store, heartbeatIntervalMs: 60_000 });
+  shutdown = attachSignaling(wss, { store, heartbeatIntervalMs: 60_000, disconnectGraceMs: 300 });
   await new Promise<void>((resolve) => server.listen(0, resolve));
   url = `ws://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -378,7 +378,9 @@ describe('leaving', () => {
     expect(store.roomCount).toBe(1);
 
     await ana.close();
-    await sleep(100);
+    // Departure is announced only after the disconnect grace window, so a
+    // network blip never churns the room.
+    await sleep(700);
 
     // The old build kept empty rooms forever, permanently claiming the code.
     expect(await store.peers('ephemeral')).toHaveLength(0);
@@ -434,6 +436,102 @@ describe('resilience', () => {
       state: { audio: true, video: true, screen: false },
     });
     expect((await latecomer.next('error')).code).toBe(ERROR_CODES.ROOM_FULL);
+  });
+});
+
+describe('graceful reconnection', () => {
+  it('holds the seat through a disconnect grace window', async () => {
+    const ana = await connect();
+    await ana.join('grace', 'Ana');
+    const ben = await connect();
+    await ben.join('grace', 'Ben');
+
+    await ben.close();
+    // Inside the grace window nothing is announced…
+    await sleep(120);
+    expect(ana.count('peer-left')).toBe(0);
+    // …after it, the departure is.
+    const left = await ana.next('peer-left');
+    expect(left.reason).toBe('disconnected');
+  });
+
+  it('resumes inside the grace window with zero churn for everyone else', async () => {
+    const ana = await connect();
+    await ana.join('grace', 'Ana');
+    const ben = await connect();
+    const benWelcome = await ben.join('grace', 'Ben');
+    await sleep(30);
+    const joinsBefore = ana.count('peer-joined');
+
+    // Simulate a planned socket swap: close, reconnect, resume the identity.
+    await ben.close();
+    const benAgain = await connect();
+    benAgain.send({
+      type: 'join',
+      roomId: 'grace',
+      name: 'Ben',
+      state: { audio: true, video: true, screen: false },
+      resumeOf: benWelcome.self.id,
+    });
+    const welcome = await benAgain.next('welcome');
+    expect(welcome.self.id).toBe(benWelcome.self.id);
+    expect(welcome.peers.map((peer) => peer.name)).toEqual(['Ana']);
+
+    // Well past the grace window: Ana heard nothing at all.
+    await sleep(700);
+    expect(ana.count('peer-left')).toBe(0);
+    expect(ana.count('peer-joined')).toBe(joinsBefore);
+  });
+
+  it('lets a resume take over a zombie socket the server has not noticed', async () => {
+    const ana = await connect();
+    await ana.join('grace', 'Ana');
+    const ben = await connect();
+    const benWelcome = await ben.join('grace', 'Ben');
+    await sleep(30);
+    const joinsBefore = ana.count('peer-joined');
+
+    // Ben's network died but the old socket is still open server-side.
+    const benAgain = await connect();
+    benAgain.send({
+      type: 'join',
+      roomId: 'grace',
+      name: 'Ben',
+      state: { audio: true, video: true, screen: false },
+      resumeOf: benWelcome.self.id,
+    });
+    const welcome = await benAgain.next('welcome');
+    expect(welcome.self.id).toBe(benWelcome.self.id);
+
+    await sleep(700);
+    expect(ana.count('peer-left')).toBe(0);
+    expect(ana.count('peer-joined')).toBe(joinsBefore);
+  });
+
+  it('throttles a join storm without tearing the connection down', async () => {
+    let sawLimit = false;
+    // Distinct rooms so capacity never interferes; the limiter is per IP.
+    for (let index = 0; index < 18 && !sawLimit; index += 1) {
+      const client = await connect();
+      client.send({
+        type: 'join',
+        roomId: `stormy${index}`,
+        name: `Peer ${index}`,
+        state: { audio: false, video: false, screen: false },
+      });
+      const reply = await Promise.race([
+        client.next('welcome', 2000).catch(() => null),
+        client.next('error', 2000).catch(() => null),
+      ]);
+      if (reply && reply.type === 'error') {
+        expect(reply.code).toBe(ERROR_CODES.RATE_LIMITED);
+        // The crucial part: throttling must not be fatal. A flapping client
+        // retries; it is never kicked out of an ongoing call.
+        expect(reply.fatal).toBe(false);
+        sawLimit = true;
+      }
+    }
+    expect(sawLimit).toBe(true);
   });
 });
 
