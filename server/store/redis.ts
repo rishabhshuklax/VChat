@@ -18,10 +18,10 @@
  */
 import Redis from 'ioredis';
 
-import { hashPassword, verifyPassword } from '../security.ts';
-import { log } from '../logger.ts';
-import { ERROR_CODES, type MediaState, type Peer } from '../../shared/protocol.ts';
-import type { Envelope, JoinRequest, JoinResult, RoomStore, Unsubscribe } from './types.ts';
+import { hashPassword, verifyPassword } from '../security.js';
+import { log } from '../logger.js';
+import { ERROR_CODES, type MediaState, type Peer } from '../../shared/protocol.js';
+import type { Envelope, JoinRequest, JoinResult, RoomStore, Unsubscribe } from './types.js';
 
 /** Rooms self-destruct after this long without activity, as a backstop against leaks. */
 const ROOM_TTL_SECONDS = 12 * 60 * 60;

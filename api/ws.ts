@@ -11,11 +11,11 @@
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 
-import { MAX_MESSAGE_BYTES, PROTOCOL_VERSION } from '../shared/protocol.ts';
-import { attachSignaling } from '../server/signaling.ts';
-import { hasTurn } from '../server/ice.ts';
-import { createRoomStore } from '../server/store/index.ts';
-import { log } from '../server/logger.ts';
+import { MAX_MESSAGE_BYTES, PROTOCOL_VERSION } from '../shared/protocol.js';
+import { attachSignaling } from '../server/signaling.js';
+import { hasTurn } from '../server/ice.js';
+import { createRoomStore } from '../server/store/index.js';
+import { log } from '../server/logger.js';
 
 /**
  * Function instances are reused across connections under Fluid compute, so the

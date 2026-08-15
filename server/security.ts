@@ -8,7 +8,7 @@
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
-import { ROOM_CODE_ALPHABET } from '../shared/protocol.ts';
+import { ROOM_CODE_ALPHABET } from '../shared/protocol.js';
 
 const scryptAsync = promisify(scrypt) as (
   password: string | Buffer,

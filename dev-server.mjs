@@ -7,24 +7,28 @@
  * `proxy` field, which does not proxy raw WebSocket connections at all — the
  * app could not actually connect in development.
  *
- * Requires Node 22.18+, which strips TypeScript types natively.
+ * Server modules are loaded through Vite's SSR pipeline rather than imported
+ * directly. Server code uses `.js` import specifiers (the TypeScript ESM
+ * convention, and what Vercel's per-file transpile requires at runtime); Vite
+ * resolves those back to the `.ts` sources, whereas a bare Node import would
+ * look for `.js` files that do not exist on disk.
  */
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer } from 'ws';
 
-import { attachSignaling } from './server/signaling.ts';
-import { createRoomStore } from './server/store/index.ts';
-import { MAX_MESSAGE_BYTES } from './shared/protocol.ts';
-
 const PORT = Number(process.env.PORT ?? 5173);
-
-const store = createRoomStore();
 
 const vite = await createViteServer({
   server: { middlewareMode: true },
   appType: 'spa',
 });
+
+const { attachSignaling } = await vite.ssrLoadModule('/server/signaling.ts');
+const { createRoomStore } = await vite.ssrLoadModule('/server/store/index.ts');
+const { MAX_MESSAGE_BYTES } = await vite.ssrLoadModule('/shared/protocol.ts');
+
+const store = createRoomStore();
 
 const httpServer = createHttpServer((request, response) => {
   if (request.url === '/api/ws') {

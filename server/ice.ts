@@ -5,7 +5,7 @@
  * symmetric NAT and some corporate firewalls, where media must be relayed. Set
  * the TURN_* variables to add a relay and close that gap.
  */
-import type { IceServer } from '../shared/protocol.ts';
+import type { IceServer } from '../shared/protocol.js';
 
 const DEFAULT_STUN = [
   'stun:stun.l.google.com:19302',

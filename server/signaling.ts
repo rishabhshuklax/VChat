@@ -28,11 +28,11 @@ import {
   type ErrorCode,
   type MediaState,
   type ServerMessage,
-} from '../shared/protocol.ts';
-import { buildIceServers } from './ice.ts';
-import { log } from './logger.ts';
-import { RateLimiter, newPeerId } from './security.ts';
-import type { Envelope, RoomStore, Unsubscribe } from './store/types.ts';
+} from '../shared/protocol.js';
+import { buildIceServers } from './ice.js';
+import { log } from './logger.js';
+import { RateLimiter, newPeerId } from './security.js';
+import type { Envelope, RoomStore, Unsubscribe } from './store/types.js';
 
 export interface SignalingOptions {
   store: RoomStore;

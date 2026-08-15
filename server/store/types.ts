@@ -8,7 +8,7 @@
  * development, and the Redis adapter serves multi-instance deployments without
  * the signaling layer knowing which one it is talking to.
  */
-import type { ErrorCode, MediaState, Peer, ServerMessage } from '../../shared/protocol.ts';
+import type { ErrorCode, MediaState, Peer, ServerMessage } from '../../shared/protocol.js';
 
 /** A message to deliver, plus who should receive it. */
 export interface Envelope {

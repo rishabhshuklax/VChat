@@ -7,9 +7,9 @@
  * Set `REDIS_URL` to swap in the Redis adapter when you need rooms to span
  * instances. See `./redis.ts`.
  */
-import { hashPassword, verifyPassword } from '../security.ts';
-import { ERROR_CODES, type MediaState, type Peer } from '../../shared/protocol.ts';
-import type { Envelope, JoinRequest, JoinResult, RoomStore, Unsubscribe } from './types.ts';
+import { hashPassword, verifyPassword } from '../security.js';
+import { ERROR_CODES, type MediaState, type Peer } from '../../shared/protocol.js';
+import type { Envelope, JoinRequest, JoinResult, RoomStore, Unsubscribe } from './types.js';
 
 interface MemoryPeer extends Peer {
   lastSeen: number;
