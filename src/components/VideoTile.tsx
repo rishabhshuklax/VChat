@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from 'react';
 
 import type { Participant } from '@/lib/call-engine';
 import { avatarColor, cn, initials } from '@/lib/utils';
-import { MicOffIcon, PinIcon, ScreenIcon } from './Icons';
+import { FlipIcon, MicOffIcon, PinIcon, ScreenIcon } from './Icons';
 
 interface VideoTileProps {
   participant: Participant;
@@ -10,6 +10,12 @@ interface VideoTileProps {
   featured?: boolean;
   pinned?: boolean;
   onTogglePin?: (id: string) => void;
+  /** Self-view mirroring. False when the back camera is publishing. */
+  mirror?: boolean;
+  /** Renders a flip-camera button on this tile (local tiles on multi-camera devices). */
+  onFlip?: () => void;
+  /** Tiny picture-in-picture treatment: no name plate, just the essentials. */
+  compact?: boolean;
 }
 
 /**
@@ -24,6 +30,9 @@ function VideoTileImpl({
   featured = false,
   pinned = false,
   onTogglePin,
+  mirror = true,
+  onFlip,
+  compact = false,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -69,8 +78,9 @@ function VideoTileImpl({
         className={cn(
           'h-full w-full bg-canvas object-cover transition-opacity duration-300',
           showVideo ? 'opacity-100' : 'opacity-0',
-          // A self-view that is not mirrored feels wrong; a screen share must not be.
-          participant.isLocal && !participant.state.screen && 'scale-x-[-1]',
+          // A front-camera self-view that is not mirrored feels wrong; a back
+          // camera or a screen share must never be.
+          participant.isLocal && !participant.state.screen && mirror && 'scale-x-[-1]',
           participant.state.screen && 'object-contain',
         )}
       />
@@ -99,43 +109,69 @@ function VideoTileImpl({
         </div>
       )}
 
-      {/* Name chip */}
-      <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
-        <span
+      {/* Name chip — omitted on the tiny PiP card, where it would cover the face. */}
+      {compact ? (
+        !participant.state.audio && (
+          <span className="absolute bottom-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-danger">
+            <MicOffIcon className="h-3 w-3 text-white" />
+          </span>
+        )
+      ) : (
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
+          <span
+            className={cn(
+              'flex min-w-0 items-center gap-2 rounded-full bg-black/55 py-1 pr-3 pl-2.5 backdrop-blur-md',
+              participant.speaking && 'text-accent',
+            )}
+          >
+            {participant.state.audio ? (
+              <span className="eq shrink-0" aria-hidden="true">
+                <span className="h-[5px]" style={{ transform: `scaleY(${0.5 + level * 2.2})` }} />
+                <span className="h-[11px]" style={{ transform: `scaleY(${0.35 + level * 2.6})` }} />
+                <span className="h-[7px]" style={{ transform: `scaleY(${0.45 + level * 2})` }} />
+              </span>
+            ) : (
+              <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-danger">
+                <MicOffIcon className="h-2.5 w-2.5 text-white" />
+              </span>
+            )}
+            {participant.state.screen && <ScreenIcon className="h-3.5 w-3.5 shrink-0" />}
+            <span className="truncate text-[13px] font-medium text-white">
+              {participant.name}
+              {participant.isLocal && <span className="text-white/50"> · you</span>}
+            </span>
+            {participant.quality && participant.quality.level !== 'good' && (
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  participant.quality.level === 'poor' ? 'bg-danger' : 'bg-caution',
+                )}
+                title={`Connection ${participant.quality.level}`}
+              />
+            )}
+          </span>
+        </div>
+      )}
+
+      {onFlip && (
+        <button
+          type="button"
+          onClick={onFlip}
+          // A parent may be draggable (the PiP); a tap on this button is a
+          // button press, not the start of a drag.
+          onPointerDown={(event) => event.stopPropagation()}
+          aria-label="Flip camera"
           className={cn(
-            'flex min-w-0 items-center gap-2 rounded-full bg-black/55 py-1 pr-3 pl-2.5 backdrop-blur-md',
-            participant.speaking && 'text-accent',
+            'absolute flex items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md',
+            'transition-all duration-200 [transition-timing-function:var(--ease-spring)] hover:scale-105 hover:bg-black/75 active:scale-90',
+            compact ? 'top-1.5 right-1.5 h-7 w-7' : 'top-2 left-2 h-9 w-9',
           )}
         >
-          {participant.state.audio ? (
-            <span className="eq shrink-0" aria-hidden="true">
-              <span className="h-[5px]" style={{ transform: `scaleY(${0.5 + level * 2.2})` }} />
-              <span className="h-[11px]" style={{ transform: `scaleY(${0.35 + level * 2.6})` }} />
-              <span className="h-[7px]" style={{ transform: `scaleY(${0.45 + level * 2})` }} />
-            </span>
-          ) : (
-            <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-danger">
-              <MicOffIcon className="h-2.5 w-2.5 text-white" />
-            </span>
-          )}
-          {participant.state.screen && <ScreenIcon className="h-3.5 w-3.5 shrink-0" />}
-          <span className="truncate text-[13px] font-medium text-white">
-            {participant.name}
-            {participant.isLocal && <span className="text-white/50"> · you</span>}
-          </span>
-          {participant.quality && participant.quality.level !== 'good' && (
-            <span
-              className={cn(
-                'h-1.5 w-1.5 shrink-0 rounded-full',
-                participant.quality.level === 'poor' ? 'bg-danger' : 'bg-caution',
-              )}
-              title={`Connection ${participant.quality.level}`}
-            />
-          )}
-        </span>
-      </div>
+          <FlipIcon className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        </button>
+      )}
 
-      {onTogglePin && (
+      {onTogglePin && !compact && (
         <button
           type="button"
           onClick={() => onTogglePin(participant.id)}

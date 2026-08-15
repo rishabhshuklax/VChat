@@ -8,6 +8,10 @@ interface VideoGridProps {
   participants: Participant[];
   pinnedId: string | null;
   onTogglePin: (id: string) => void;
+  /** Self-view mirroring, false while the back camera publishes. */
+  localMirror?: boolean;
+  /** Flip-camera handler, rendered on the local tile only. */
+  onFlipLocal?: (() => void) | undefined;
 }
 
 /**
@@ -19,7 +23,13 @@ interface VideoGridProps {
  * measured container aspect ratio rather than from fixed breakpoints, so tiles
  * stay near 16:9 on an ultrawide monitor and a phone alike.
  */
-export function VideoGrid({ participants, pinnedId, onTogglePin }: VideoGridProps) {
+export function VideoGrid({
+  participants,
+  pinnedId,
+  onTogglePin,
+  localMirror = true,
+  onFlipLocal,
+}: VideoGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState(16 / 9);
 
@@ -49,6 +59,8 @@ export function VideoGrid({ participants, pinnedId, onTogglePin }: VideoGridProp
             featured
             pinned={featured.id === pinnedId}
             onTogglePin={onTogglePin}
+            mirror={featured.isLocal ? localMirror : true}
+            onFlip={featured.isLocal ? onFlipLocal : undefined}
           />
         </div>
         <div
@@ -63,6 +75,8 @@ export function VideoGrid({ participants, pinnedId, onTogglePin }: VideoGridProp
                 participant={participant}
                 pinned={participant.id === pinnedId}
                 onTogglePin={onTogglePin}
+                mirror={participant.isLocal ? localMirror : true}
+                onFlip={participant.isLocal ? onFlipLocal : undefined}
               />
             </div>
           ))}
@@ -89,6 +103,8 @@ export function VideoGrid({ participants, pinnedId, onTogglePin }: VideoGridProp
           featured={participants.length === 1}
           pinned={participant.id === pinnedId}
           onTogglePin={participants.length > 1 ? onTogglePin : undefined}
+          mirror={participant.isLocal ? localMirror : true}
+          onFlip={participant.isLocal ? onFlipLocal : undefined}
         />
       ))}
     </div>

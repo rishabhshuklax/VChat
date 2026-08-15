@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 /** Wire protocol version. Bumped on any breaking change to the schemas below. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Hard ceiling on a single WebSocket frame. SDP blobs are the largest thing we carry. */
 export const MAX_MESSAGE_BYTES = 256 * 1024;
@@ -117,6 +117,14 @@ export const signalPayloadSchema = z.discriminatedUnion('kind', [
 
 export type SignalPayload = z.infer<typeof signalPayloadSchema>;
 
+/** One point of an Air Ink stroke, in stage-relative coordinates. */
+export const inkPointSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+export type InkPoint = z.infer<typeof inkPointSchema>;
+
 // ---------------------------------------------------------------------------
 // Client -> Server
 // ---------------------------------------------------------------------------
@@ -151,6 +159,15 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('reaction'),
     /** A single emoji. 16 chars covers multi-codepoint sequences (ZWJ, skin tones). */
     emoji: z.string().trim().min(1).max(16),
+  }),
+  z.object({
+    type: z.literal('ink'),
+    /** Client-chosen stroke id; points for one stroke stream under one id. */
+    stroke: z.string().min(1).max(64),
+    /** Coordinates normalised to the stage (0..1), batched to bound frame rate. */
+    points: z.array(inkPointSchema).max(64),
+    /** True on the final batch of a stroke; starts the fade on every screen. */
+    done: z.boolean(),
   }),
   z.object({ type: z.literal('leave') }),
   z.object({ type: z.literal('ping'), ts: z.number().optional() }),
@@ -243,6 +260,13 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
     name: displayNameSchema,
     emoji: z.string().max(16),
     ts: z.number().int().nonnegative(),
+  }),
+  z.object({
+    type: z.literal('ink'),
+    from: peerIdSchema,
+    stroke: z.string().max(64),
+    points: z.array(inkPointSchema).max(64),
+    done: z.boolean(),
   }),
   z.object({
     type: z.literal('error'),

@@ -216,6 +216,23 @@ try {
       (await ana.next('reaction')).id === reaction.id,
   );
 
+  // --- Air Ink ------------------------------------------------------------
+  ana.send({
+    type: 'ink',
+    stroke: 'verify1',
+    points: [
+      { x: 0.2, y: 0.2 },
+      { x: 0.6, y: 0.6 },
+    ],
+    done: true,
+  });
+  const ink = await ben.next('ink');
+  await sleep(300);
+  check(
+    'ink relayed to peers but not echoed to the sender',
+    ink.stroke === 'verify1' && ink.points.length === 2 && ana.count('ink') === 0,
+  );
+
   // --- Latency ------------------------------------------------------------
   const pingSentAt = Date.now();
   ana.send({ type: 'ping', ts: pingSentAt });

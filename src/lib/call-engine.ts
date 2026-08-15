@@ -10,6 +10,7 @@
 import {
   LIMITS,
   type ChatMessage,
+  type InkPoint,
   type MediaState,
   type Peer,
   type ServerMessage,
@@ -55,6 +56,14 @@ export interface ReactionEvent {
   name: string;
 }
 
+/** One inbound batch of a remote Air Ink stroke. */
+export interface InkEvent {
+  from: string;
+  stroke: string;
+  points: InkPoint[];
+  done: boolean;
+}
+
 export interface CallState {
   status: CallStatus;
   error: { code: string; message: string } | null;
@@ -71,6 +80,11 @@ export interface CallState {
   reactions: ReactionEvent[];
   /** True while a screen share is being published by this client. */
   presenting: boolean;
+  /** Which way the camera faces. Drives self-view mirroring. */
+  facing: 'user' | 'environment';
+  /** Every display name that has been in this call — the call receipt. */
+  roster: string[];
+  reactionCount: number;
 }
 
 export interface JoinOptions {
@@ -100,6 +114,9 @@ const INITIAL: CallState = {
   notices: [],
   reactions: [],
   presenting: false,
+  facing: 'user',
+  roster: [],
+  reactionCount: 0,
 };
 
 let noticeSeq = 0;
@@ -107,6 +124,8 @@ let noticeSeq = 0;
 export class CallEngine {
   #state: CallState = INITIAL;
   readonly #listeners = new Set<() => void>();
+  /** Ink is imperative: the canvas layer registers here, outside React state. */
+  readonly #inkHandlers = new Set<(event: InkEvent) => void>();
 
   readonly #signaling = new SignalingClient();
   readonly #meter = new AudioMeter();
@@ -160,6 +179,11 @@ export class CallEngine {
   dismissNotice = (id: string): void => {
     this.#set({ notices: this.#state.notices.filter((notice) => notice.id !== id) });
   };
+
+  #noteName(name: string): void {
+    if (this.#state.roster.includes(name)) return;
+    this.#set({ roster: [...this.#state.roster, name] });
+  }
 
   // -------------------------------------------------------------------------
   // Joining
@@ -268,6 +292,8 @@ export class CallEngine {
           error: null,
         });
         this.#patchParticipant('local', { name: message.self.name });
+        this.#noteName(message.self.name);
+        for (const peer of message.peers) this.#noteName(peer.name);
 
         if (!this.#mesh || firstConnect) {
           this.#mesh?.close();
@@ -290,6 +316,7 @@ export class CallEngine {
 
       case 'peer-joined': {
         this.#addParticipant(message.peer);
+        this.#noteName(message.peer.name);
         this.#mesh?.addPeer(message.peer.id);
         this.#notify('info', `${message.peer.name} joined`);
         break;
@@ -332,11 +359,25 @@ export class CallEngine {
           emoji: message.emoji,
           name: message.from === this.#state.selfId ? 'You' : message.name,
         };
-        this.#set({ reactions: [...this.#state.reactions, reaction] });
+        this.#set({
+          reactions: [...this.#state.reactions, reaction],
+          reactionCount: this.#state.reactionCount + 1,
+        });
         // Matches the float-up animation length, plus a little slack.
         setTimeout(() => {
           this.#set({ reactions: this.#state.reactions.filter((r) => r.id !== reaction.id) });
         }, 2800);
+        break;
+      }
+
+      case 'ink': {
+        const event: InkEvent = {
+          from: message.from,
+          stroke: message.stroke,
+          points: message.points,
+          done: message.done,
+        };
+        for (const handler of this.#inkHandlers) handler(event);
         break;
       }
 
@@ -592,6 +633,42 @@ export class CallEngine {
     }
   }
 
+  /**
+   * Swaps between front and back camera on phones. A fresh track is acquired
+   * with the opposite facingMode and published via replaceTrack, so remote
+   * peers see the switch with no renegotiation.
+   */
+  flipCamera = async (): Promise<void> => {
+    if (this.#localState.screen) {
+      this.#notify('info', 'Stop sharing your screen to flip the camera.');
+      return;
+    }
+    const next = this.#state.facing === 'user' ? 'environment' : 'user';
+    try {
+      const { stream } = await acquireLocalMedia({ audio: false, video: true, facing: next });
+      const track = stream.getVideoTracks()[0];
+      if (!track) throw new Error('no video track');
+
+      const previous = this.#localStream?.getVideoTracks()[0];
+      if (previous) {
+        previous.stop();
+        this.#localStream?.removeTrack(previous);
+      }
+      this.#localStream ??= new MediaStream();
+      this.#localStream.addTrack(track);
+      this.#mesh?.setLocalTrack('video', track);
+
+      this.#localState = { ...this.#localState, video: true };
+      // The flip owns camera selection now; a stale deviceId would win over
+      // facingMode on the next acquisition.
+      this.#set({ facing: next, cameraId: null });
+      this.#patchParticipant('local', { stream: this.#localStream });
+      this.#pushState();
+    } catch (error) {
+      this.#notify('error', describeMediaError(error).message);
+    }
+  };
+
   async #refreshDevices(): Promise<void> {
     try {
       this.#set({ devices: await listDevices() });
@@ -612,6 +689,17 @@ export class CallEngine {
 
   sendReaction = (emoji: string): void => {
     this.#signaling.send({ type: 'reaction', emoji });
+  };
+
+  sendInk = (stroke: string, points: InkPoint[], done: boolean): void => {
+    if (points.length === 0 && !done) return;
+    this.#signaling.send({ type: 'ink', stroke, points, done });
+  };
+
+  /** Registers a listener for remote ink. Returns the unsubscribe. */
+  onInk = (handler: (event: InkEvent) => void): (() => void) => {
+    this.#inkHandlers.add(handler);
+    return () => this.#inkHandlers.delete(handler);
   };
 
   setChatVisible = (visible: boolean): void => {

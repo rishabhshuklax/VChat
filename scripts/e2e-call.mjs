@@ -221,6 +221,40 @@ try {
   });
   check('chat message delivered between peers', true);
 
+  // --- Air Ink ------------------------------------------------------------
+  await wake(alicePage);
+  await alicePage.getByRole('button', { name: 'Draw (D)' }).click();
+  const ink = alicePage.locator('canvas[data-ink]');
+  const box = await ink.boundingBox();
+  if (box) {
+    await alicePage.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4);
+    await alicePage.mouse.down();
+    for (let step = 0; step <= 10; step += 1) {
+      await alicePage.mouse.move(
+        box.x + box.width * (0.3 + 0.04 * step),
+        box.y + box.height * (0.4 + 0.02 * step),
+        { steps: 2 },
+      );
+      await alicePage.waitForTimeout(30);
+    }
+    await alicePage.mouse.up();
+  }
+  const bobInkPixels = await waitFor(
+    async () =>
+      bobPage.evaluate(() => {
+        const canvas = document.querySelector('canvas[data-ink]');
+        if (!canvas) return 0;
+        const context = canvas.getContext('2d');
+        const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let sum = 0;
+        for (let index = 3; index < data.length; index += 64) sum += data[index];
+        return sum;
+      }),
+    { label: "ink pixels on Bob's canvas", timeout: 8000 },
+  );
+  check('Air Ink stroke rendered on the other peer', bobInkPixels > 0, `alpha sum ${bobInkPixels}`);
+  await alicePage.keyboard.press('Escape'); // leave draw mode
+
   // --- Reactions ----------------------------------------------------------
   await wake(alicePage);
   await alicePage.getByRole('button', { name: 'Reactions' }).click();

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ERROR_CODES, formatRoomCode, normalizeRoomCode } from '@shared/protocol';
 import { ChatPanel } from '@/components/ChatPanel';
+import { InkLayer } from '@/components/InkLayer';
 import { ControlBar } from '@/components/ControlBar';
 import { CheckIcon, CopyIcon, VideoLogo } from '@/components/Icons';
 import { ParticipantsPanel } from '@/components/ParticipantsPanel';
@@ -44,6 +45,14 @@ export function Room() {
   // the whole screen. Any input brings it back.
   const [chromeVisible, setChromeVisible] = useState(true);
 
+  // FaceTime-mode swap: tap the little card to trade places with the stage.
+  const [swapped, setSwapped] = useState(false);
+  // Air Ink drawing mode.
+  const [inkMode, setInkMode] = useState(false);
+  // Push-to-talk: true while Space is held with the mic muted.
+  const [pttLive, setPttLive] = useState(false);
+  const pttRef = useRef(false);
+
   useEffect(() => () => engine.dispose(), [engine]);
 
   // A fatal server error sends us back to the lobby with an explanation
@@ -76,7 +85,8 @@ export function Room() {
 
   // Idle chrome. Only hides when there is an actual conversation on screen
   // and no panel is open.
-  const canHideChrome = phase === 'call' && panel === 'none' && state.participants.length > 1;
+  const canHideChrome =
+    phase === 'call' && panel === 'none' && !inkMode && state.participants.length > 1;
   useEffect(() => {
     if (!canHideChrome) {
       setChromeVisible(true);
@@ -159,7 +169,24 @@ export function Room() {
           event.preventDefault();
           setPanel((current) => (current === 'participants' ? 'none' : 'participants'));
           break;
+        case 'd':
+          event.preventDefault();
+          setInkMode((current) => !current);
+          break;
+        case ' ': {
+          // Hold Space to talk while muted; release to go quiet again.
+          if (event.repeat) break;
+          event.preventDefault();
+          const localNow = engine.getSnapshot().participants.find((p) => p.isLocal);
+          if (localNow && !localNow.state.audio) {
+            pttRef.current = true;
+            setPttLive(true);
+            engine.toggleAudio();
+          }
+          break;
+        }
         case 'escape':
+          setInkMode(false);
           setPanel('none');
           break;
         default:
@@ -167,8 +194,31 @@ export function Room() {
       }
     };
 
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === ' ' && pttRef.current) {
+        pttRef.current = false;
+        setPttLive(false);
+        engine.toggleAudio();
+      }
+    };
+
+    // Losing focus mid-hold must not leave the mic hot.
+    const onBlur = () => {
+      if (pttRef.current) {
+        pttRef.current = false;
+        setPttLive(false);
+        engine.toggleAudio();
+      }
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
   }, [engine, phase]);
 
   const shareUrl = `${window.location.origin}/r/${roomId}`;
@@ -200,19 +250,67 @@ export function Room() {
 
   if (phase === 'ended') {
     return (
-      <main className="scheme-light grain flex min-h-dvh flex-col items-center justify-center bg-paper px-6 text-center text-soot">
-        <span className="flex h-12 w-12 animate-pop items-center justify-center rounded-2xl bg-soot">
-          <VideoLogo className="h-6 w-6 text-accent" />
-        </span>
-        <h1 className="mt-6 animate-rise font-display text-5xl tracking-tight sm:text-6xl">
+      <main className="scheme-light grain flex min-h-dvh flex-col items-center justify-center bg-paper px-5 py-10 text-soot">
+        <h1 className="animate-rise text-center font-display text-5xl tracking-tight sm:text-6xl">
           That&apos;s a wrap.
         </h1>
-        <p className="mt-3 animate-rise text-sm text-soot-muted" style={{ animationDelay: '80ms' }}>
-          {formatDuration(elapsedMs)} in room {formatRoomCode(roomId)}
-        </p>
+
+        {/* The call receipt — a ticket stub. Rendered from local state only;
+            nothing was ever stored anywhere. */}
         <div
-          className="mt-9 flex animate-rise flex-wrap items-center justify-center gap-3"
-          style={{ animationDelay: '150ms' }}
+          className="mt-8 w-full max-w-sm animate-rise-spring rounded-2xl bg-white/80 p-6 shadow-xl"
+          style={{ animationDelay: '90ms' }}
+        >
+          <div className="flex items-center justify-between">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-soot">
+              <VideoLogo className="h-4.5 w-4.5 text-accent" />
+            </span>
+            <span className="font-mono text-[11px] tracking-[0.22em] text-soot-muted uppercase">
+              Call receipt
+            </span>
+          </div>
+
+          <dl className="mt-5 space-y-2.5 font-mono text-[13px]">
+            {[
+              ['Room', formatRoomCode(roomId)],
+              [
+                'Date',
+                new Date().toLocaleDateString([], {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                }),
+              ],
+              ['Duration', formatDuration(elapsedMs)],
+              ['People', state.roster.length > 0 ? state.roster.join(', ') : '—'],
+              ['Messages', String(state.messages.length)],
+              ['Reactions', String(state.reactionCount)],
+            ].map(([term, detail]) => (
+              <div key={term} className="flex items-baseline justify-between gap-4">
+                <dt className="shrink-0 text-soot-muted uppercase">{term}</dt>
+                <dd className="min-w-0 text-right font-bold break-words">{detail}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="my-5 border-t-2 border-dashed border-paper-line" />
+          {/* Decorative barcode. */}
+          <div
+            aria-hidden="true"
+            className="h-9 w-full opacity-80"
+            style={{
+              background:
+                'repeating-linear-gradient(90deg, var(--color-soot) 0 2px, transparent 2px 5px, var(--color-soot) 5px 6px, transparent 6px 11px)',
+            }}
+          />
+          <p className="mt-4 text-center text-[11px] leading-relaxed text-soot-faint">
+            Nothing was recorded. This stub exists only on your screen.
+          </p>
+        </div>
+
+        <div
+          className="mt-8 flex animate-rise flex-wrap items-center justify-center gap-3"
+          style={{ animationDelay: '180ms' }}
         >
           <Button
             variant="accent"
@@ -242,7 +340,14 @@ export function Room() {
 
   // FaceTime mode: exactly two people, nothing pinned, nobody presenting —
   // the other person fills the screen and you become a small movable card.
+  // Tapping the card swaps the two, which is how you check your own output.
   const faceTime = participants.length === 2 && !presenting && !pinnedId && Boolean(local);
+  const featured = faceTime ? (swapped ? local : remote[0]) : null;
+  const pipParticipant = faceTime ? (swapped ? remote[0] : local) : null;
+
+  const localMirror = state.facing !== 'environment';
+  const canFlip = state.devices.cameras.length > 1;
+  const flip = canFlip ? () => void engine.flipCamera() : undefined;
 
   const chromeHidden = !chromeVisible;
 
@@ -298,16 +403,32 @@ export function Room() {
 
       {/* Stage */}
       <main className="absolute inset-0 px-2 pt-[3.9rem] pb-[6.5rem] sm:px-3">
-        {faceTime && local ? (
+        {faceTime && featured && pipParticipant ? (
           <>
-            {remote[0] && (
-              <VideoTile participant={remote[0]} featured pinned={false} onTogglePin={togglePin} />
-            )}
-            <SelfPip participant={local} />
+            <VideoTile
+              participant={featured}
+              featured
+              mirror={featured.isLocal ? localMirror : true}
+              onFlip={featured.isLocal ? flip : undefined}
+            />
+            <FloatingTile
+              participant={pipParticipant}
+              mirror={pipParticipant.isLocal ? localMirror : true}
+              onFlip={pipParticipant.isLocal ? flip : undefined}
+              onTap={() => setSwapped((current) => !current)}
+            />
           </>
         ) : (
-          <VideoGrid participants={participants} pinnedId={pinnedId} onTogglePin={togglePin} />
+          <VideoGrid
+            participants={participants}
+            pinnedId={pinnedId}
+            onTogglePin={togglePin}
+            localMirror={localMirror}
+            onFlipLocal={flip}
+          />
         )}
+
+        <InkLayer engine={engine} selfId={state.selfId} active={inkMode} />
 
         {participants.length === 1 && (
           <div className="absolute inset-x-0 bottom-[7.25rem] z-10 flex justify-center px-4">
@@ -336,6 +457,24 @@ export function Room() {
         )}
       </Sheet>
 
+      {(inkMode || pttLive) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[6.75rem] z-20 flex justify-center">
+          <span className="glass animate-pop rounded-full border border-line px-4 py-1.5 text-[13px] text-ink">
+            {inkMode ? (
+              <>
+                <span className="text-accent">✏</span> Draw anywhere — ink evaporates ·{' '}
+                <span className="text-ink-muted">Esc to stop</span>
+              </>
+            ) : (
+              <>
+                <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-accent align-middle" />
+                Live — release Space to mute
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Controls */}
       <footer
         className={cn(
@@ -349,6 +488,8 @@ export function Room() {
           engine={engine}
           chatOpen={panel === 'chat'}
           participantsOpen={panel === 'participants'}
+          inkActive={inkMode}
+          onToggleInk={() => setInkMode((current) => !current)}
           onToggleChat={() => setPanel((current) => (current === 'chat' ? 'none' : 'chat'))}
           onToggleParticipants={() =>
             setPanel((current) => (current === 'participants' ? 'none' : 'participants'))
@@ -361,10 +502,21 @@ export function Room() {
 }
 
 /**
- * The draggable self-view used in a 1:1 call — your own face as a small card
- * you can move out of the way, exactly as the native call apps do it.
+ * The floating card in a 1:1 call: draggable, and a tap (a press that never
+ * really moves) swaps it with the main stage — so checking your own camera is
+ * one touch, exactly like the native call apps.
  */
-function SelfPip({ participant }: { participant: Participant }) {
+function FloatingTile({
+  participant,
+  mirror,
+  onFlip,
+  onTap,
+}: {
+  participant: Participant;
+  mirror: boolean;
+  onFlip: (() => void) | undefined;
+  onTap: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const drag = useRef<{
@@ -377,6 +529,7 @@ function SelfPip({ participant }: { participant: Participant }) {
     maxX: number;
     minY: number;
     maxY: number;
+    moved: boolean;
   } | null>(null);
 
   const onPointerDown = (event: React.PointerEvent) => {
@@ -401,6 +554,7 @@ function SelfPip({ participant }: { participant: Participant }) {
       maxX: parentRect.right - margin - rect.width - naturalLeft,
       minY: parentRect.top + margin - naturalTop,
       maxY: parentRect.bottom - margin - rect.height - naturalTop,
+      moved: false,
     };
     element.setPointerCapture(event.pointerId);
   };
@@ -408,15 +562,21 @@ function SelfPip({ participant }: { participant: Participant }) {
   const onPointerMove = (event: React.PointerEvent) => {
     const current = drag.current;
     if (!current || event.pointerId !== current.pointerId) return;
+    const dx = event.clientX - current.startX;
+    const dy = event.clientY - current.startY;
+    if (!current.moved && dx * dx + dy * dy < 36) return; // 6px slop = still a tap
+    current.moved = true;
     const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
     setOffset({
-      x: clamp(current.baseX + event.clientX - current.startX, current.minX, current.maxX),
-      y: clamp(current.baseY + event.clientY - current.startY, current.minY, current.maxY),
+      x: clamp(current.baseX + dx, current.minX, current.maxX),
+      y: clamp(current.baseY + dy, current.minY, current.maxY),
     });
   };
 
   const onPointerUp = () => {
+    const current = drag.current;
     drag.current = null;
+    if (current && !current.moved) onTap();
   };
 
   return (
@@ -426,15 +586,17 @@ function SelfPip({ participant }: { participant: Participant }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      role="button"
+      aria-label={`Swap ${participant.name} with the main view`}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
       className={cn(
         // Sits just above the control bar; the stage's own padding does not
         // constrain absolutely-positioned children.
-        'absolute right-3 bottom-[7.25rem] z-10 w-28 cursor-grab touch-none select-none sm:w-44',
+        'absolute right-3 bottom-[7.25rem] z-10 w-32 cursor-grab touch-none select-none sm:w-48',
         'aspect-[3/4] animate-rise-spring shadow-2xl active:cursor-grabbing sm:aspect-video',
       )}
     >
-      <VideoTile participant={participant} />
+      <VideoTile participant={participant} compact mirror={mirror} onFlip={onFlip} />
     </div>
   );
 }

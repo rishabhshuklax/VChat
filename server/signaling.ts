@@ -263,6 +263,28 @@ export function attachSignaling(
     });
   }
 
+  async function handleInk(
+    session: Session,
+    message: Extract<ClientMessage, { type: 'ink' }>,
+  ): Promise<void> {
+    // Drawing streams many small frames; a spammy error per frame would be
+    // worse than dropping them, so a stray ink message is ignored quietly.
+    if (!session.roomId) return;
+    // The sender already rendered locally for zero-latency feedback, so the
+    // relay excludes them — unlike chat, which echoes for ordering.
+    await publish(session.roomId, {
+      to: 'room',
+      exclude: [session.id],
+      message: {
+        type: 'ink',
+        from: session.id,
+        stroke: message.stroke,
+        points: message.points,
+        done: message.done,
+      },
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Lifecycle
   // -------------------------------------------------------------------------
@@ -346,6 +368,9 @@ export function attachSignaling(
               break;
             case 'reaction':
               await handleReaction(session, message);
+              break;
+            case 'ink':
+              await handleInk(session, message);
               break;
             case 'leave':
               await detach(session, 'left');

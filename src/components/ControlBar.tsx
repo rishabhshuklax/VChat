@@ -10,6 +10,7 @@ import {
   HangUpIcon,
   MicIcon,
   MicOffIcon,
+  PencilIcon,
   PeopleIcon,
   ScreenIcon,
   ScreenOffIcon,
@@ -22,6 +23,8 @@ interface ControlBarProps {
   engine: CallEngine;
   chatOpen: boolean;
   participantsOpen: boolean;
+  inkActive: boolean;
+  onToggleInk: () => void;
   onToggleChat: () => void;
   onToggleParticipants: () => void;
   onLeave: () => void;
@@ -48,7 +51,7 @@ function ControlButton({ label, active, highlight, badge, onClick, children }: C
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12',
+        'relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12',
         'transition-all duration-200 [transition-timing-function:var(--ease-spring)]',
         'hover:scale-105 active:scale-90',
         active
@@ -73,6 +76,8 @@ export function ControlBar({
   engine,
   chatOpen,
   participantsOpen,
+  inkActive,
+  onToggleInk,
   onToggleChat,
   onToggleParticipants,
   onLeave,
@@ -144,6 +149,10 @@ export function ControlBar({
           </ControlButton>
         )}
 
+        <ControlButton label="Draw (D)" active highlight={inkActive} onClick={onToggleInk}>
+          <PencilIcon className="h-5 w-5" />
+        </ControlButton>
+
         <ControlButton
           label="Reactions"
           active
@@ -191,7 +200,7 @@ export function ControlBar({
           title="Leave call"
           aria-label="Leave call"
           className={cn(
-            'flex h-11 items-center justify-center rounded-full bg-danger px-5 text-white sm:h-12 sm:px-6',
+            'flex h-10 items-center justify-center rounded-full bg-danger px-4 text-white sm:h-12 sm:px-6',
             'transition-all duration-200 [transition-timing-function:var(--ease-spring)] hover:scale-105 hover:brightness-110 active:scale-90',
           )}
         >

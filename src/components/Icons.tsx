@@ -184,3 +184,18 @@ export const ArrowRightIcon = (props: IconProps) => (
     <path d="m13.5 5.5 6.5 6.5-6.5 6.5" />
   </Icon>
 );
+
+export const FlipIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+    <path d="M20 3v3.5h-3.5" />
+    <circle cx="12" cy="12" r="2.4" />
+  </Icon>
+);
+
+export const PencilIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m14.5 4.5 5 5L8 21H3v-5L14.5 4.5Z" />
+    <path d="m12.5 6.5 5 5" />
+  </Icon>
+);

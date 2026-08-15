@@ -74,6 +74,8 @@ export interface MediaRequest {
   video: boolean;
   cameraId?: string | undefined;
   microphoneId?: string | undefined;
+  /** Preferred camera direction on phones. A specific cameraId wins over this. */
+  facing?: 'user' | 'environment' | undefined;
 }
 
 const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
@@ -125,7 +127,11 @@ export async function acquireLocalMedia(request: MediaRequest): Promise<{
       const video = await navigator.mediaDevices.getUserMedia({
         video: {
           ...VIDEO_CONSTRAINTS,
-          ...(request.cameraId ? { deviceId: { exact: request.cameraId } } : {}),
+          ...(request.cameraId
+            ? { deviceId: { exact: request.cameraId } }
+            : request.facing
+              ? { facingMode: { ideal: request.facing } }
+              : {}),
         },
       });
       for (const track of video.getVideoTracks()) stream.addTrack(track);

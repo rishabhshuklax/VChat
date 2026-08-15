@@ -289,6 +289,42 @@ describe('chat and state', () => {
     expect((await ana.next('reaction')).id).toBe(forBen.id);
   });
 
+  it('relays ink strokes to everyone except the sender', async () => {
+    const ana = await connect();
+    const anaWelcome = await ana.join('inky', 'Ana');
+    const ben = await connect();
+    await ben.join('inky', 'Ben');
+
+    ana.send({
+      type: 'ink',
+      stroke: 's1',
+      points: [
+        { x: 0.1, y: 0.2 },
+        { x: 0.3, y: 0.4 },
+      ],
+      done: false,
+    });
+    ana.send({ type: 'ink', stroke: 's1', points: [{ x: 0.5, y: 0.6 }], done: true });
+
+    const inkForBen = await ben.next('ink');
+    expect(inkForBen.from).toBe(anaWelcome.self.id);
+    expect(inkForBen.stroke).toBe('s1');
+    expect(inkForBen.points.length).toBeGreaterThan(0);
+
+    // The sender drew locally already; the relay must not echo back.
+    await sleep(200);
+    expect(ana.count('ink')).toBe(0);
+  });
+
+  it('rejects ink with out-of-range coordinates', async () => {
+    const ana = await connect();
+    await ana.join('inky', 'Ana');
+    ana.sendRaw(
+      JSON.stringify({ type: 'ink', stroke: 's', points: [{ x: 2, y: 0 }], done: false }),
+    );
+    expect((await ana.next('error')).code).toBe(ERROR_CODES.INVALID_MESSAGE);
+  });
+
   it('rejects a blank reaction', async () => {
     const ana = await connect();
     await ana.join('reactive', 'Ana');
