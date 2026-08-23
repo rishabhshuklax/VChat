@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "alias": ["call.thinkingmachinelabs.dev"],
   "framework": "vite",
   "buildCommand": "vite build",
   "outputDirectory": "dist",
