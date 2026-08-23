@@ -1,5 +1,7 @@
 # VChat
 
+**Live at [call.thinkingmachinelabs.dev](https://call.thinkingmachinelabs.dev)**
+
 Dead simple, cross-platform, peer-to-peer video chat. Share a link, talk face to face.
 
 Audio and video travel **directly between participants** over WebRTC — encrypted with
